@@ -1,0 +1,177 @@
+"""
+Application configuration management.
+
+Uses pydantic-settings for environment-based configuration with validation.
+Integrates with cloud_quant database configuration.
+"""
+
+from functools import lru_cache
+from pathlib import Path
+from typing import Literal
+from urllib.parse import quote_plus
+
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    """Application settings loaded from environment variables."""
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    # Application Settings
+    app_name: str = Field(default="akshare_web", description="Application name")
+    app_env: Literal["development", "testing", "production"] = Field(
+        default="development", description="Application environment"
+    )
+    app_debug: bool = Field(default=False, description="Debug mode")
+    app_version: str = Field(default="0.1.0", description="Application version")
+
+    # Server Settings
+    host: str = Field(default="0.0.0.0", description="Server host")
+    port: int = Field(default=8000, description="Server port")
+    workers: int = Field(default=1, description="Number of worker processes")
+
+    # Database Settings (Shared with cloud_quant)
+    mysql_host: str = Field(default="localhost", description="MySQL host")
+    mysql_port: int = Field(default=3306, description="MySQL port")
+    mysql_user: str = Field(default="root", description="MySQL user")
+    mysql_password: str = Field(default="", description="MySQL password")
+    mysql_database: str = Field(
+        default="akshare_web", description="Main database name for akshare_web business tables"
+    )
+
+    # Data warehouse DB for akshare scripts output
+    data_mysql_host: str = Field(default="localhost", description="Data MySQL host")
+    data_mysql_port: int = Field(default=3306, description="Data MySQL port")
+    data_mysql_user: str = Field(default="root", description="Data MySQL user")
+    data_mysql_password: str = Field(default="", description="Data MySQL password")
+    data_mysql_database: str = Field(
+        default="akshare_data", description="Data warehouse database name"
+    )
+
+    # Database Connection Pool
+    database_pool_size: int = Field(default=5, description="Database connection pool size")
+    database_max_overflow: int = Field(default=10, description="Database pool max overflow")
+
+    # Redis Settings (optional)
+    redis_url: str | None = Field(default=None, description="Redis connection URL")
+
+    # Authentication Settings
+    secret_key: str = Field(default="change-this-secret-key", description="JWT secret key")
+    access_token_expire_minutes: int = Field(
+        default=1440, description="Access token expiration in minutes (24 hours)"
+    )
+    refresh_token_expire_days: int = Field(
+        default=30, description="Refresh token expiration in days"
+    )
+    algorithm: str = Field(default="HS256", description="JWT algorithm")
+
+    # Email Settings
+    smtp_host: str | None = Field(default=None, description="SMTP server host")
+    smtp_port: int = Field(default=587, description="SMTP server port")
+    smtp_user: str | None = Field(default=None, description="SMTP username")
+    smtp_password: str | None = Field(default=None, description="SMTP password")
+    emails_from_email: str | None = Field(default=None, description="From email address")
+    emails_from_name: str = Field(default="akshare_web", description="From email name")
+
+    # Task Scheduler Settings
+    enable_scheduler: bool = Field(default=True, description="Enable task scheduler")
+    scheduler_bootstrap_on_startup: bool = Field(
+        default=True, description="Bootstrap scheduler on startup"
+    )
+    scheduler_max_workers: int = Field(
+        default=3, description="Maximum number of concurrent task workers"
+    )
+    task_retry_max_attempts: int = Field(
+        default=3, description="Maximum number of task retry attempts"
+    )
+    task_retry_base_delay: int = Field(
+        default=60, description="Base delay for retry in seconds"
+    )
+
+    # Rate Limiting
+    rate_limit_per_minute: int = Field(
+        default=100, description="Rate limit per minute per user"
+    )
+    rate_limit_burst: int = Field(default=200, description="Rate limit burst size")
+
+    # CORS Settings
+    cors_origins: list[str] = Field(
+        default=["http://localhost:5173", "http://localhost:3000", "http://localhost:6600"],
+        description="Allowed CORS origins",
+    )
+    cors_allow_credentials: bool = Field(default=True, description="Allow CORS credentials")
+
+    # Logging
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(
+        default="INFO", description="Logging level"
+    )
+    log_file: str = Field(default="logs/app.log", description="Log file path")
+
+    # Data Storage
+    data_dir: Path = Field(default=Path("./data"), description="Data storage directory")
+    upload_dir: Path = Field(default=Path("./uploads"), description="Upload directory")
+
+    # akshare Settings
+    akshare_timeout: int = Field(default=120, description="akshare request timeout")
+    akshare_call_timeout: int = Field(default=120, description="akshare call timeout")
+    akshare_retry_attempts: int = Field(default=3, description="akshare retry attempts")
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v: str | list[str]) -> list[str]:
+        """Parse CORS origins from string or list."""
+        if isinstance(v, str):
+            import json
+
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                return [origin.strip() for origin in v.split(",")]
+        return v
+
+    @property
+    def is_development(self) -> bool:
+        """Check if running in development mode."""
+        return self.app_env == "development"
+
+    @property
+    def is_production(self) -> bool:
+        """Check if running in production mode."""
+        return self.app_env == "production"
+
+    @property
+    def database_url(self) -> str:
+        """Get async database URL for SQLAlchemy."""
+        password = quote_plus(self.mysql_password)
+        host = f"{self.mysql_host}:{self.mysql_port}"
+        return f"mysql+aiomysql://{self.mysql_user}:{password}@{host}/{self.mysql_database}"
+
+    @property
+    def database_url_sync(self) -> str:
+        """Get synchronous database URL for Alembic."""
+        password = quote_plus(self.mysql_password)
+        host = f"{self.mysql_host}:{self.mysql_port}"
+        return f"mysql+pymysql://{self.mysql_user}:{password}@{host}/{self.mysql_database}"
+
+    @property
+    def data_database_url(self) -> str:
+        """Get data warehouse database URL (for akshare scripts)."""
+        password = quote_plus(self.data_mysql_password)
+        host = f"{self.data_mysql_host}:{self.data_mysql_port}"
+        return f"mysql+pymysql://{self.data_mysql_user}:{password}@{host}/{self.data_mysql_database}"
+
+
+@lru_cache
+def get_settings() -> Settings:
+    """Get cached settings instance."""
+    return Settings()
+
+
+settings = get_settings()

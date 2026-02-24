@@ -1,0 +1,322 @@
+"""
+Task scheduler service.
+
+Manages scheduled task execution using APScheduler with async support.
+Integrates with SchedulerService and ExecutionService.
+"""
+
+import asyncio
+import uuid
+from datetime import UTC, datetime
+from typing import Any
+
+from loguru import logger
+
+from app.core.database import async_session_maker
+from app.models.task import ScheduledTask, ScheduleType, TaskStatus, TriggeredBy
+from app.services.scheduler_service import get_scheduler_service, init_scheduler_service
+from app.services.execution_service import ExecutionService
+from app.services.script_service import ScriptService
+
+
+class TaskScheduler:
+    """
+    Service for managing scheduled task execution.
+
+    Provides async task scheduling, execution, and retry logic.
+    """
+
+    def __init__(self):
+        self._running = False
+        self.scheduler_service = None
+
+    @property
+    def is_running(self) -> bool:
+        """Check if scheduler is running."""
+        return self._running and self.scheduler_service is not None
+
+    async def start(self) -> None:
+        """Start the scheduler."""
+        if self._running:
+            logger.warning("Scheduler already running")
+            return
+
+        logger.info("Starting task scheduler...")
+        self.scheduler_service = init_scheduler_service()
+        await self.scheduler_service.start()
+
+        # Add jobs for all active tasks
+        await self._load_active_tasks()
+
+        self._running = True
+        logger.info("Task scheduler started successfully")
+
+    async def shutdown(self) -> None:
+        """Shutdown the scheduler."""
+        if not self._running:
+            return
+
+        logger.info("Shutting down task scheduler...")
+        if self.scheduler_service:
+            await self.scheduler_service.shutdown()
+            self.scheduler_service = None
+
+        self._running = False
+        logger.info("Task scheduler shut down")
+
+    async def _load_active_tasks(self) -> None:
+        """Load all active tasks from database and schedule them."""
+        from sqlalchemy import select
+
+        async with async_session_maker() as db:
+            result = await db.execute(
+                select(ScheduledTask).where(ScheduledTask.is_active == True)
+            )
+            tasks = result.scalars().all()
+
+            for task in tasks:
+                try:
+                    await self._schedule_task(task, db)
+                    logger.info(f"Scheduled task: {task.name} (ID: {task.id})")
+                except Exception as e:
+                    logger.error(f"Failed to schedule task {task.id}: {e}")
+
+    async def _schedule_task(self, task: ScheduledTask, db) -> None:
+        """Add a task to the scheduler."""
+        if self.scheduler_service is None:
+            return
+
+        # Determine trigger type and args
+        trigger_type, trigger_args = self._get_trigger_config(task)
+
+        # Add job to scheduler
+        await self.scheduler_service.add_job(
+            job_id=f"task_{task.id}",
+            func=self._execute_task_wrapper,
+            trigger_type=trigger_type,
+            trigger_args=trigger_args,
+            job_name=task.name,
+            kwargs={"task_id": task.id},
+        )
+
+    def _get_trigger_config(self, task: ScheduledTask) -> tuple[str, dict]:
+        """Get trigger configuration from task schedule."""
+        schedule_expr = task.schedule_expression
+
+        if task.schedule_type == ScheduleType.CRON:
+            return "cron", {"cron_expression": schedule_expr}
+        elif task.schedule_type == ScheduleType.DAILY:
+            # Format: "HH:MM"
+            if ":" in schedule_expr:
+                hour, minute = schedule_expr.split(":")
+                cron_expr = f"{minute} {hour} * * *"
+                return "cron", {"cron_expression": cron_expr}
+            return "cron", {"cron_expression": schedule_expr}
+        elif task.schedule_type == ScheduleType.WEEKLY:
+            return "cron", {"cron_expression": schedule_expr}
+        elif task.schedule_type == ScheduleType.MONTHLY:
+            return "cron", {"cron_expression": schedule_expr}
+        elif task.schedule_type == ScheduleType.INTERVAL:
+            # Parse interval like "5m", "1h", "30s"
+            return "interval", self._parse_interval(schedule_expr)
+        else:
+            return "once", {}
+
+    def _parse_interval(self, interval_str: str) -> dict:
+        """Parse interval string to trigger args."""
+        interval_str = interval_str.strip().lower()
+        args = {}
+
+        if interval_str.endswith("s"):
+            args["seconds"] = int(interval_str[:-1])
+        elif interval_str.endswith("m"):
+            args["minutes"] = int(interval_str[:-1])
+        elif interval_str.endswith("h"):
+            args["hours"] = int(interval_str[:-1])
+        elif interval_str.endswith("d"):
+            args["days"] = int(interval_str[:-1])
+        else:
+            # Default to minutes
+            args["minutes"] = int(interval_str)
+
+        return args
+
+    async def _execute_task_wrapper(self, task_id: int) -> None:
+        """Execute task with error handling and retry logic."""
+        async with async_session_maker() as db:
+            from sqlalchemy import select
+
+            # Get task
+            result = await db.execute(
+                select(ScheduledTask).where(ScheduledTask.id == task_id)
+            )
+            task = result.scalar_one_or_none()
+
+            if task is None:
+                logger.error(f"Task {task_id} not found")
+                return
+
+            if not task.is_active:
+                logger.info(f"Task {task_id} is not active, skipping")
+                return
+
+            # Execute with retry
+            await self._execute_with_retry(task, db)
+
+    async def _execute_with_retry(self, task: ScheduledTask, db) -> None:
+        """Execute task with retry mechanism."""
+        execution_service = ExecutionService(db)
+        script_service = ScriptService(db)
+
+        max_attempts = task.max_retries if task.retry_on_failure else 1
+        timeout = task.timeout if task.timeout > 0 else None
+
+        for attempt in range(max_attempts):
+            # Create execution record
+            execution = await execution_service.create_execution(
+                task_id=task.id,
+                script_id=task.script_id,
+                params=task.parameters,
+                triggered_by=TriggeredBy.SCHEDULER,
+            )
+
+            try:
+                # Update status to running
+                await execution_service.update_execution(
+                    execution_id=execution.execution_id,
+                    status=TaskStatus.RUNNING,
+                    start_time=datetime.now(UTC),
+                )
+
+                # Get table row count before execution
+                script = await script_service.get_script(task.script_id)
+                rows_before = None
+                if script and script.target_table:
+                    from app.data_fetch.providers.akshare_provider import AkshareProvider
+                    provider = AkshareProvider()
+                    rows_before = provider.get_table_row_count(script.target_table)
+
+                # Execute script
+                result = await script_service.execute_script(
+                    script_id=task.script_id,
+                    execution_id=execution.execution_id,
+                    params=task.parameters,
+                    timeout=timeout,
+                )
+
+                # Get row count after execution
+                rows_after = None
+                if script and script.target_table:
+                    from app.data_fetch.providers.akshare_provider import AkshareProvider
+                    provider = AkshareProvider()
+                    rows_after = provider.get_table_row_count(script.target_table)
+
+                # Update execution result
+                if result.get("success"):
+                    await execution_service.update_execution(
+                        execution_id=execution.execution_id,
+                        status=TaskStatus.COMPLETED,
+                        end_time=datetime.now(UTC),
+                        result=result,
+                        rows_before=rows_before,
+                        rows_after=rows_after,
+                    )
+
+                    # Update task last execution
+                    task.last_execution_at = datetime.now(UTC)
+                    await db.commit()
+
+                    logger.info(
+                        f"Task {task.name} (ID: {task.id}) completed successfully. "
+                        f"Rows: {rows_before} -> {rows_after}"
+                    )
+                    return  # Success, exit retry loop
+                else:
+                    raise Exception(result.get("error", "Unknown error"))
+
+            except Exception as e:
+                logger.error(f"Task {task.name} (ID: {task.id}) attempt {attempt + 1} failed: {e}")
+
+                await execution_service.update_execution(
+                    execution_id=execution.execution_id,
+                    status=TaskStatus.FAILED,
+                    end_time=datetime.now(UTC),
+                    error_message=str(e),
+                )
+
+                await db.commit()
+
+                # Handle execution completion with retry service
+                await execution_service.handle_execution_complete(
+                    execution_id=execution.execution_id,
+                    status=TaskStatus.FAILED,
+                )
+
+                # If not last attempt, wait before retry
+                if attempt < max_attempts - 1:
+                    # Exponential backoff: 60s, 120s, 240s...
+                    delay = 60 * (2 ** attempt)
+                    logger.info(f"Retrying task {task.id} in {delay} seconds...")
+                    await asyncio.sleep(delay)
+
+    async def add_task(self, task_id: int, db) -> None:
+        """Add a task to the scheduler."""
+        from sqlalchemy import select
+
+        result = await db.execute(select(ScheduledTask).where(ScheduledTask.id == task_id))
+        task = result.scalar_one_or_none()
+
+        if task is None:
+            logger.error(f"Task {task_id} not found")
+            return
+
+        await self._schedule_task(task, db)
+        logger.info(f"Added task to scheduler: {task.name} (ID: {task.id})")
+
+    async def update_task(self, task_id: int, db) -> None:
+        """Update a task in the scheduler."""
+        # Remove and re-add
+        await self.remove_task(task_id)
+        await self.add_task(task_id, db)
+
+    async def remove_task(self, task_id: int) -> None:
+        """Remove a task from the scheduler."""
+        if self.scheduler_service is None:
+            return
+
+        try:
+            await self.scheduler_service.remove_job(f"task_{task_id}")
+            logger.info(f"Removed task from scheduler: {task_id}")
+        except Exception as e:
+            logger.warning(f"Failed to remove task {task_id}: {e}")
+
+    async def trigger_task(self, task_id: int, user_id: int | None = None) -> str:
+        """Trigger immediate task execution."""
+        from sqlalchemy import select
+
+        async with async_session_maker() as db:
+            result = await db.execute(select(ScheduledTask).where(ScheduledTask.id == task_id))
+            task = result.scalar_one_or_none()
+
+            if task is None:
+                raise ValueError(f"Task {task_id} not found")
+
+            execution_service = ExecutionService(db)
+
+            # Create execution record
+            execution = await execution_service.create_execution(
+                task_id=task.id,
+                script_id=task.script_id,
+                params=task.parameters,
+                triggered_by=TriggeredBy.MANUAL,
+                operator_id=user_id,
+            )
+
+            # Execute in background
+            asyncio.create_task(self._execute_with_retry(task, db))
+
+            return execution.execution_id
+
+
+# Global scheduler instance
+task_scheduler = TaskScheduler()

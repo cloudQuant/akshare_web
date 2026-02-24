@@ -1,0 +1,196 @@
+"""
+Data acquisition API routes.
+
+Provides endpoints for manual data download and progress tracking.
+"""
+
+from datetime import UTC, datetime
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from app.api.dependencies import get_current_user, get_db
+from app.api.schemas import (
+    APIResponse,
+    DataDownloadRequest,
+    DataDownloadResponse,
+    DownloadProgressResponse,
+    TaskExecutionResponse,
+)
+from app.models.interface import DataInterface
+from app.models.task import ScheduledTask, TaskExecution, TaskStatus
+from app.services.data_acquisition import DataAcquisitionService
+
+router = APIRouter()
+
+# Service instance
+data_service = DataAcquisitionService()
+
+
+@router.post("/download", status_code=status.HTTP_202_ACCEPTED)
+async def trigger_download(
+    request: DataDownloadRequest,
+    current_user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Trigger manual data download.
+
+    Initiates data acquisition for the specified interface.
+    Returns execution ID for progress tracking.
+    """
+    # Get interface
+    result = await db.execute(
+        select(DataInterface)
+        .where(DataInterface.id == request.interface_id)
+    )
+    iface = result.scalar_one_or_none()
+
+    if iface is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Data interface not found",
+        )
+
+    if not iface.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Data interface is not active",
+        )
+
+    # Create temporary task execution record
+    import uuid
+    execution = TaskExecution(
+        execution_id=f"dl_{uuid.uuid4().hex[:12]}",
+        task_id=0,  # Manual download has no parent task
+        script_id=iface.name,
+        status=TaskStatus.PENDING,
+        retry_count=0,
+    )
+
+    db.add(execution)
+    await db.commit()
+    await db.refresh(execution)
+
+    # Trigger async download
+    await data_service.execute_download(
+        execution_id=execution.id,
+        interface_id=iface.id,
+        parameters=request.parameters,
+        db=db,
+    )
+
+    return DataDownloadResponse(
+        execution_id=execution.id,
+        status="pending",
+        message="Data download started",
+    )
+
+
+@router.get("/download/{execution_id}/status", )
+async def get_download_progress(
+    execution_id: int,
+    current_user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Get download progress.
+
+    Returns current status and progress of data download.
+    """
+    result = await db.execute(
+        select(TaskExecution).where(TaskExecution.id == execution_id)
+    )
+    execution = result.scalar_one_or_none()
+
+    if execution is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Execution not found",
+        )
+
+    # Calculate progress
+    progress = 0.0
+    if execution.status == TaskStatus.COMPLETED:
+        progress = 100.0
+    elif execution.status == TaskStatus.RUNNING:
+        if execution.start_time:
+            now = datetime.now(UTC)
+            st = execution.start_time
+            # Handle naive vs aware datetime comparison
+            if st.tzinfo is None:
+                st = st.replace(tzinfo=UTC)
+            elapsed = (now - st).total_seconds()
+            # Simple progress estimate (could be improved with actual progress tracking)
+            progress = min(50.0, elapsed * 2)
+    elif execution.status == TaskStatus.FAILED:
+        progress = 0.0
+
+    # Estimate completion (rough estimate for running tasks)
+    estimated_completion = None
+    if execution.status == TaskStatus.RUNNING and execution.start_time:
+        # Assume 30 second average duration
+        estimated_completion = execution.start_time.timestamp() + 30
+
+    return DownloadProgressResponse(
+        execution_id=execution.id,
+        status=execution.status.value,
+        progress=progress,
+        message=execution.error_message if execution.status == TaskStatus.FAILED else None,
+        rows_processed=execution.rows_after,
+        started_at=execution.start_time,
+        estimated_completion=datetime.fromtimestamp(estimated_completion, UTC) if estimated_completion else None,
+    )
+
+
+@router.get("/download/{execution_id}/result")
+async def get_download_result(
+    execution_id: int,
+    current_user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Get download result data.
+
+    Returns the actual data from completed download.
+    For successful downloads, returns the data rows.
+    """
+    result = await db.execute(
+        select(TaskExecution).where(TaskExecution.id == execution_id)
+    )
+    execution = result.scalar_one_or_none()
+
+    if execution is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Execution not found",
+        )
+
+    if execution.status == TaskStatus.RUNNING:
+        raise HTTPException(
+            status_code=status.HTTP_202_ACCEPTED,
+            detail="Download still in progress",
+        )
+
+    if execution.status == TaskStatus.PENDING:
+        raise HTTPException(
+            status_code=status.HTTP_202_ACCEPTED,
+            detail="Download queued",
+        )
+
+    if execution.status == TaskStatus.FAILED or execution.status == TaskStatus.TIMEOUT:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Download failed: {execution.error_message}",
+        )
+
+    # Return success info
+    return {
+        "success": True,
+        "execution_id": execution_id,
+        "rows_affected": execution.rows_after,
+        "duration_ms": execution.duration,
+        "completed_at": execution.end_time,
+    }

@@ -1,0 +1,99 @@
+version: '3.8'
+
+services:
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: akshare_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-akshare_root_pass}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-akshare_web}
+      MYSQL_USER: ${MYSQL_USER:-akshare_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-akshare_pass}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    command: --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Data Warehouse (optional, for analytics storage)
+  mysql_warehouse:
+    image: mysql:8.0
+    container_name: akshare_warehouse
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${WAREHOUSE_ROOT_PASSWORD:-warehouse_root_pass}
+      MYSQL_DATABASE: ${WAREHOUSE_DATABASE:-akshare_warehouse}
+      MYSQL_USER: ${WAREHOUSE_USER:-warehouse_user}
+      MYSQL_PASSWORD: ${WAREHOUSE_PASSWORD:-warehouse_pass}
+    ports:
+      - "3307:3306"
+    volumes:
+      - warehouse_data:/var/lib/mysql
+    command: --default-authentication-plugin=mysql_native_password
+    profiles:
+      - warehouse
+
+  # Backend API
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: akshare_backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: mysql+aiomysql://${MYSQL_USER:-akshare_user}:${MYSQL_PASSWORD:-akshare_pass}@mysql:3306/${MYSQL_DATABASE:-akshare_web}
+      WAREHOUSE_DB_URL: mysql+aiomysql://${WAREHOUSE_USER:-warehouse_user}:${WAREHOUSE_PASSWORD:-warehouse_pass}@mysql_warehouse:3306/${WAREHOUSE_DATABASE:-akshare_warehouse}
+      SECRET_KEY: ${SECRET_KEY:-change-this-secret-key-in-production}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Frontend (Nginx)
+  frontend:
+    image: nginx:alpine
+    container_name: akshare_frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./frontend/dist:/usr/share/nginx/html
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  mysql_data:
+    driver: local
+  warehouse_data:
+    driver: local
+
+networks:
+  default:
+    name: akshare_network

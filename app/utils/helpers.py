@@ -1,0 +1,122 @@
+"""
+Helper utility functions.
+
+Provides common utility functions used across the application.
+"""
+
+import re
+from typing import Any
+
+
+def generate_table_name(interface_name: str, prefix: str = "ak_") -> str:
+    """
+    Generate SQL table name from interface name.
+
+    Args:
+        interface_name: Name of the akshare interface
+        prefix: Prefix for table names (default: "ak_")
+
+    Returns:
+        Safe SQL table name
+    """
+    # Replace dots and special characters with underscores
+    clean_name = interface_name.replace(".", "_").replace("-", "_")
+    # Remove any remaining non-alphanumeric characters except underscore
+    clean_name = re.sub(r"[^a-zA-Z0-9_]", "", clean_name)
+    # Ensure it doesn't start with a number
+    if clean_name and clean_name[0].isdigit():
+        clean_name = f"t_{clean_name}"
+    # Limit length
+    if len(clean_name) > 60:
+        clean_name = clean_name[:60]
+    return f"{prefix}{clean_name}"
+
+
+def clean_column_names(columns: list[str] | Any) -> list[str]:
+    """
+    Clean DataFrame column names for SQL compatibility.
+
+    Args:
+        columns: List of column names
+
+    Returns:
+        List of cleaned column names
+    """
+    cleaned = []
+    for col in columns:
+        # Convert to string
+        col_str = str(col)
+        # Lowercase
+        col_str = col_str.lower()
+        # Replace spaces and special characters with underscore
+        col_str = re.sub(r"[^a-zA-Z0-9]+", "_", col_str)
+        # Remove leading/trailing underscores
+        col_str = col_str.strip("_")
+        # Limit length
+        if len(col_str) > 64:
+            col_str = col_str[:64]
+        # Ensure non-empty
+        if not col_str:
+            col_str = "column"
+        cleaned.append(col_str)
+    return cleaned
+
+
+def format_size(bytes: int | None) -> str:
+    """
+    Format byte size to human-readable format.
+
+    Args:
+        bytes: Size in bytes
+
+    Returns:
+        Formatted size string
+    """
+    if bytes is None:
+        return "Unknown"
+
+    for unit in ["B", "KB", "MB", "GB", "TB"]:
+        if bytes < 1024.0:
+            return f"{bytes:.1f} {unit}"
+        bytes /= 1024.0
+    return f"{bytes:.1f} PB"
+
+
+def format_duration(milliseconds: int | None) -> str:
+    """
+    Format duration in milliseconds to human-readable format.
+
+    Args:
+        milliseconds: Duration in milliseconds
+
+    Returns:
+        Formatted duration string
+    """
+    if milliseconds is None:
+        return "Unknown"
+
+    if milliseconds < 1000:
+        return f"{milliseconds}ms"
+    elif milliseconds < 60000:
+        seconds = milliseconds / 1000
+        return f"{seconds:.1f}s"
+    else:
+        minutes = milliseconds / 60000
+        return f"{minutes:.1f}m"
+
+
+def truncate_string(text: str, max_length: int = 50, suffix: str = "...") -> str:
+    """
+    Truncate string to maximum length.
+
+    Args:
+        text: String to truncate
+        max_length: Maximum length
+        suffix: Suffix to add if truncated
+
+    Returns:
+        Truncated string
+    """
+    if len(text) <= max_length:
+        return text
+    return text[: max_length - len(suffix)] + suffix

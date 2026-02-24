@@ -1,0 +1,431 @@
+"""
+Akshare data provider for data fetch operations
+Supports MySQL storage with automatic table creation
+"""
+
+import logging
+import os
+import queue
+import threading
+import uuid
+from datetime import datetime
+from typing import Any
+
+import akshare as ak
+import pandas as pd
+import pymysql
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.config import settings
+
+
+class FuncThread(threading.Thread):
+    """Thread for executing function with timeout"""
+
+    def __init__(self, func, *args, **kwargs):
+        super().__init__()
+        self.func = func
+        self.args = args
+        self.kwargs = kwargs
+        self.result = queue.Queue()
+        self.exc = None
+        self.daemon = True
+
+    def run(self):
+        try:
+            result = self.func(*self.args, **self.kwargs)
+            self.result.put(("success", result))
+        except Exception as e:
+            self.result.put(("error", str(e)))
+
+    def get_result(self, timeout=None):
+        try:
+            return self.result.get(timeout=timeout)
+        except queue.Empty:
+            return ("timeout", None)
+
+
+class AkshareProvider:
+    """
+    Akshare数据提供者
+    支持从akshare获取数据并存储到数据库
+    """
+
+    def __init__(self, db_url: str | None = None, logger: logging.Logger | None = None):
+        """
+        初始化数据提供者
+
+        Args:
+            db_url: 数据库连接URL
+            logger: 日志记录器
+        """
+        self.db_url = db_url or settings.database_url
+        self.logger = logger or logging.getLogger("AkshareProvider")
+        self.connection = None
+        self.cursor = None
+        self.batch_size = 1000
+        self.max_retries = 3
+        self.retry_delay = 5
+
+        # MySQL连接配置
+        if self.db_url.startswith("mysql"):
+            self._parse_db_url()
+
+    def _parse_db_url(self):
+        """解析数据库URL"""
+        from urllib.parse import urlparse
+
+        parsed = urlparse(self.db_url)
+        self.db_config = {
+            "host": parsed.hostname or "localhost",
+            "port": parsed.port or 3306,
+            "user": parsed.username or "root",
+            "password": parsed.password or "",
+            "database": parsed.path.lstrip("/") if parsed.path else "akshare_data",
+            "charset": "utf8mb4",
+        }
+
+    def connect_db(self):
+        """建立数据库连接"""
+        if not self.db_url.startswith("mysql"):
+            self.logger.warning("Only MySQL is supported for data storage")
+            return False
+
+        try:
+            if not self.connection or not self.connection.open:
+                self.connection = pymysql.connect(**self.db_config)
+                self.cursor = self.connection.cursor()
+                self.logger.info("数据库连接成功")
+            return True
+        except pymysql.Error as err:
+            self.logger.error(f"数据库连接失败: {err}")
+            raise
+
+    def disconnect_db(self):
+        """关闭数据库连接"""
+        if self.cursor:
+            self.cursor.close()
+            self.cursor = None
+        if self.connection and self.connection.open:
+            self.connection.close()
+            self.connection = None
+            self.logger.info("数据库连接已关闭")
+
+    def __enter__(self):
+        self.connect_db()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.disconnect_db()
+
+    def fetch_ak_data(self, function_name: str, *args, **kwargs) -> pd.DataFrame:
+        """
+        从Akshare获取数据
+
+        Args:
+            function_name: Akshare函数名
+            *args, **kwargs: 函数参数
+
+        Returns:
+            pd.DataFrame: 获取的数据
+        """
+        try:
+            call_timeout_s = kwargs.pop("_call_timeout", None)
+            if call_timeout_s is None:
+                call_timeout_s = int(os.getenv("AKSHARE_CALL_TIMEOUT", "120"))
+            else:
+                call_timeout_s = int(call_timeout_s)
+
+            func = getattr(ak, function_name)
+            self.logger.info(f"调用Akshare函数: {function_name}")
+
+            thread = FuncThread(func, *args, **kwargs)
+            thread.start()
+
+            status, result = thread.get_result(timeout=call_timeout_s)
+
+            if status == "success":
+                if isinstance(result, pd.DataFrame):
+                    self.logger.info(f"获取数据成功，共{len(result)}行")
+                else:
+                    self.logger.info(f"获取数据成功，类型: {type(result)}")
+                return result
+            elif status == "timeout":
+                raise TimeoutError(f"Function call timed out after {call_timeout_s} seconds")
+            else:
+                raise Exception(result)
+
+        except TimeoutError as te:
+            self.logger.error(f"获取数据超时: {te}")
+            raise
+        except AttributeError:
+            self.logger.error(f"Akshare中不存在函数: {function_name}")
+            raise
+        except Exception as e:
+            self.logger.error(f"从Akshare获取数据失败: {e}")
+            raise
+
+    def _auto_create_table(self, table_name: str, df: pd.DataFrame) -> None:
+        """根据DataFrame自动创建表"""
+        type_map = {
+            "int64": "BIGINT",
+            "int32": "INT",
+            "int16": "SMALLINT",
+            "int8": "TINYINT",
+            "uint64": "BIGINT UNSIGNED",
+            "uint32": "INT UNSIGNED",
+            "float64": "DOUBLE",
+            "float32": "FLOAT",
+            "bool": "TINYINT(1)",
+            "datetime64[ns]": "DATETIME",
+            "object": "TEXT",
+        }
+
+        col_defs = []
+        for col in df.columns:
+            dtype_str = str(df[col].dtype)
+            mysql_type = type_map.get(dtype_str, "TEXT")
+            esc = col.replace("`", "``")
+            col_defs.append(f"  `{esc}` {mysql_type}")
+
+        cols_sql = ",\n".join(col_defs)
+        create_sql = (
+            f"CREATE TABLE IF NOT EXISTS `{table_name}` (\n"
+            f"{cols_sql}\n"
+            f") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+        )
+
+        try:
+            self.cursor.execute(create_sql)
+            self.connection.commit()
+            self.logger.info(f"自动建表成功: {table_name}")
+        except pymysql.Error as err:
+            self.logger.warning(f"自动建表失败 {table_name}: {err}")
+
+    def _execute_batch(self, insert_sql: str, batch: list) -> bool:
+        """执行批量插入"""
+        try:
+            self.cursor.executemany(insert_sql, batch)
+            self.connection.commit()
+            return True
+        except pymysql.Error as err:
+            self.connection.rollback()
+            self.logger.error(f"批量执行失败: {err}")
+            raise
+
+    def save_data(
+        self,
+        df: pd.DataFrame,
+        table_name: str,
+        on_duplicate_update: bool = False,
+        unique_keys: list[str] | None = None,
+        ignore_duplicates: bool = False,
+        create_table: bool = True,
+    ) -> int:
+        """
+        保存数据到数据库
+
+        Args:
+            df: 要保存的数据
+            table_name: 表名
+            on_duplicate_update: 重复时更新
+            unique_keys: 唯一键
+            ignore_duplicates: 忽略重复
+            create_table: 表不存在时自动创建
+
+        Returns:
+            保存的行数
+        """
+        if df.empty:
+            self.logger.warning(f"DataFrame为空，无需保存到 {table_name}")
+            return 0
+
+        # 清理无效列名
+        raw_cols = list(df.columns)
+        valid_idx = []
+        normalized_cols = []
+        dropped = []
+
+        for idx, col in enumerate(raw_cols):
+            if col is None or (isinstance(col, float) and pd.isna(col)):
+                dropped.append(str(col))
+                continue
+
+            col_str = str(col).strip()
+            if not col_str or col_str.lower() == "nan":
+                dropped.append(col_str or "<empty>")
+                continue
+
+            valid_idx.append(idx)
+            normalized_cols.append(col_str)
+
+        if dropped:
+            self.logger.warning(f"表 {table_name} 将丢弃 {len(dropped)} 个无效列名")
+
+        if not valid_idx:
+            self.logger.warning(f"表 {table_name} 所有列名均无效，跳过保存")
+            return 0
+
+        df = df.iloc[:, valid_idx].copy()
+        df.columns = normalized_cols
+
+        self.connect_db()
+
+        safe_table = str(table_name).replace("`", "``")
+
+        # 检查表是否存在，不存在则创建
+        if create_table:
+            try:
+                self.cursor.execute(f"SHOW TABLES LIKE '{safe_table}'")
+                if not self.cursor.fetchone():
+                    self._auto_create_table(safe_table, df)
+            except pymysql.Error as err:
+                self.logger.warning(f"检查表是否存在时出错: {err}")
+
+        # 对齐DataFrame列到表结构
+        try:
+            self.cursor.execute(f"SHOW COLUMNS FROM `{safe_table}`")
+            table_rows = self.cursor.fetchall() or []
+            table_cols_ci = {row[0].lower(): row[0] for row in table_rows}
+
+            if table_cols_ci:
+                column_mapping = {}
+                unknown = []
+                for c in df.columns:
+                    c_lower = str(c).lower()
+                    if c_lower in table_cols_ci:
+                        column_mapping[c] = table_cols_ci[c_lower]
+                    else:
+                        unknown.append(c)
+
+                if unknown:
+                    self.logger.warning(f"表 {table_name} 将忽略 {len(unknown)} 个不存在的列")
+
+                if not column_mapping:
+                    self.logger.warning(f"表 {table_name} 无可写入的有效列")
+                    return 0
+
+                df = df.rename(columns=column_mapping).copy()
+        except pymysql.Error as err:
+            self.logger.warning(f"无法读取表字段列表: {err}")
+
+        # 构建插入SQL
+        cols = list(df.columns)
+        quoted_cols = [f"`{str(col).replace('`', '``')}`" for col in cols]
+        placeholders = ", ".join(["%s"] * len(cols))
+        cols_str = ", ".join(quoted_cols)
+
+        if ignore_duplicates:
+            insert_sql = f"INSERT IGNORE INTO `{safe_table}` ({cols_str}) VALUES ({placeholders})"
+        elif on_duplicate_update and unique_keys:
+            insert_sql = f"INSERT INTO `{safe_table}` ({cols_str}) VALUES ({placeholders})"
+            update_clauses = []
+            for col in cols:
+                if col not in unique_keys:
+                    esc = str(col).replace("`", "``")
+                    update_clauses.append(f"`{esc}`=VALUES(`{esc}`)")
+            if update_clauses:
+                insert_sql += f" ON DUPLICATE KEY UPDATE {', '.join(update_clauses)}"
+        else:
+            insert_sql = f"INSERT INTO `{safe_table}` ({cols_str}) VALUES ({placeholders})"
+
+        # 处理NaN值
+        df = df.astype(object).where(pd.notnull(df), None)
+        values = df.values.tolist()
+        total_rows = len(values)
+
+        try:
+            start_time = datetime.now()
+            processed = 0
+
+            for i in range(0, total_rows, self.batch_size):
+                batch = values[i : i + self.batch_size]
+                self._execute_batch(insert_sql, batch)
+                processed += len(batch)
+
+                if (i + self.batch_size) % (self.batch_size * 10) == 0 or (i + self.batch_size) >= total_rows:
+                    elapsed = (datetime.now() - start_time).total_seconds()
+                    self.logger.info(f"已处理 {processed}/{total_rows} 行，耗时 {elapsed:.2f}s")
+
+            elapsed_seconds = (datetime.now() - start_time).total_seconds()
+            self.logger.info(f"成功保存 {total_rows} 行数据到 {table_name}，耗时 {elapsed_seconds:.2f}s")
+
+            return total_rows
+
+        except Exception as e:
+            self.logger.error(f"保存数据到 {table_name} 失败: {str(e)}")
+            raise
+        finally:
+            self.disconnect_db()
+
+    def table_exists(self, table_name: str) -> bool:
+        """检查表是否存在"""
+        try:
+            self.connect_db()
+            self.cursor.execute(f"SHOW TABLES LIKE '{table_name}'")
+            result = self.cursor.fetchone()
+            return result is not None
+        except pymysql.Error as err:
+            self.logger.error(f"检查表是否存在时出错: {err}")
+            return False
+        finally:
+            self.disconnect_db()
+
+    def get_table_row_count(self, table_name: str) -> int:
+        """获取表的行数"""
+        if not table_name:
+            return 0
+
+        try:
+            self.connect_db()
+            self.cursor.execute(f"SELECT COUNT(*) FROM `{table_name}`")
+            return self.cursor.fetchone()[0] or 0
+        except pymysql.Error:
+            return 0
+        finally:
+            self.disconnect_db()
+
+    def create_table_if_not_exists(
+        self, table_name: str = None, create_table_sql: str = None
+    ) -> bool:
+        """创建表（如果不存在）"""
+        if not self.table_exists(table_name):
+            try:
+                self.connect_db()
+                self.cursor.execute(create_table_sql)
+                self.connection.commit()
+                self.logger.info(f"成功创建表: {table_name}")
+                return True
+            except pymysql.Error as err:
+                self.logger.error(f"创建表失败: {err}")
+                return False
+            finally:
+                self.disconnect_db()
+        return False
+
+    async def get_table_row_count_async(
+        self, table_name: str, db_session: AsyncSession
+    ) -> int | None:
+        """异步获取表的行数"""
+        if not table_name:
+            return None
+
+        try:
+            result = await db_session.execute(text(f"SELECT COUNT(*) FROM `{table_name}`"))
+            return result.scalar() or 0
+        except Exception:
+            return None
+
+    @staticmethod
+    def get_uuid() -> str:
+        """生成UUID"""
+        return str(uuid.uuid4()).replace("-", "").upper()
+
+    def safe_date_format(self, series: pd.Series) -> pd.Series:
+        """安全格式化日期序列"""
+        datetime_series = pd.to_datetime(series, errors="coerce")
+        formatted = datetime_series.apply(
+            lambda x: x.strftime("%Y-%m-%d") if not pd.isnull(x) else None
+        )
+        return formatted
