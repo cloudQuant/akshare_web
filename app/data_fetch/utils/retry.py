@@ -51,7 +51,7 @@ def retry_on_exception(
     return decorator
 
 
-async def async_retry_on_exception(
+def async_retry_on_exception(
     max_retries: int = 3,
     retry_delay: int = 5,
     logger: logging.Logger | None = None,

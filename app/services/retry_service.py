@@ -5,7 +5,6 @@ Implements automatic retry mechanism for failed task executions.
 """
 
 import asyncio
-import logging
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
@@ -14,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.task import ScheduledTask, TaskExecution, TaskStatus
 from app.services.scheduler import task_scheduler
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class RetryService:

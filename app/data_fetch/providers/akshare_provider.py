@@ -14,6 +14,7 @@ from typing import Any
 import akshare as ak
 import pandas as pd
 import pymysql
+from loguru import logger as _default_logger
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -61,7 +62,7 @@ class AkshareProvider:
             logger: 日志记录器
         """
         self.db_url = db_url or settings.database_url
-        self.logger = logger or logging.getLogger("AkshareProvider")
+        self.logger = logger or _default_logger
         self.connection = None
         self.cursor = None
         self.batch_size = 1000

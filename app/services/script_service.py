@@ -3,7 +3,6 @@
 import asyncio
 import importlib
 import json
-import logging
 import os
 import re
 from datetime import UTC, datetime
@@ -16,7 +15,7 @@ from app.data_fetch.configs import SCRIPT_CATEGORIES
 from app.data_fetch.providers.akshare_provider import AkshareProvider
 from app.models.data_script import DataScript, ScriptFrequency
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class ScriptService:

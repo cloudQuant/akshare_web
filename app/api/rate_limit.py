@@ -10,6 +10,8 @@ from functools import wraps
 from typing import Callable, Any
 
 from fastapi import Request
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 
 def is_testing() -> bool:
@@ -17,12 +19,29 @@ def is_testing() -> bool:
     return os.getenv("TESTING", "false").lower() == "true"
 
 
+# Singleton limiter instance (created lazily for production)
+_limiter: Limiter | None = None
+
+
+def get_limiter() -> Limiter | None:
+    """Get or create the shared rate limiter instance.
+
+    Returns None in test mode.
+    """
+    global _limiter
+    if is_testing():
+        return None
+    if _limiter is None:
+        _limiter = Limiter(key_func=get_remote_address)
+    return _limiter
+
+
 def rate_limit(limit_string: str):
     """
     Conditional rate limiting decorator.
 
     In test mode (TESTING=true), this is a no-op decorator.
-    In production, it applies rate limiting via slowapi.
+    In production, it enforces rate limits via slowapi.
 
     Args:
         limit_string: Rate limit string (e.g., "5/minute")
@@ -31,41 +50,30 @@ def rate_limit(limit_string: str):
         Decorator function
     """
     def decorator(func: Callable) -> Callable:
-        """
-        Always return our wrapper that checks at runtime.
-        This ensures we don't apply slowapi decorator at module import time.
-        """
         @wraps(func)
         async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
-            # Check test mode at call time
             if is_testing():
-                # In test mode, just call the function directly
-                return await func(*args, **kwargs)
-            else:
-                # In production, we need to check rate limit
-                # Since we didn't use slowapi's decorator, we just call the function
-                # In a real setup, you'd want to integrate with slowapi properly
-                # For now, skip rate limiting in this simplified version
                 return await func(*args, **kwargs)
 
-        # Store original function for any metadata
+            # Extract Request from args/kwargs (FastAPI injects it)
+            request: Request | None = kwargs.get("request")
+            if request is None:
+                for arg in args:
+                    if isinstance(arg, Request):
+                        request = arg
+                        break
+
+            if request is not None:
+                lim = get_limiter()
+                if lim is not None:
+                    # Use slowapi's internal check
+                    lim._check_request_limit(request, func, [limit_string])
+
+            return await func(*args, **kwargs)
+
         async_wrapper.__rate_limit_string__ = limit_string
         async_wrapper.__original_func__ = func
 
         return async_wrapper
 
     return decorator
-
-
-def get_limiter():
-    """Get the rate limiter instance (for slowapi state integration)."""
-    if is_testing():
-        return None
-    # Create limiter on demand for production
-    from slowapi import Limiter
-    from slowapi.util import get_remote_address
-    return Limiter(key_func=get_remote_address)
-
-
-# Expose limiter for slowapi state (None in tests)
-limiter = None

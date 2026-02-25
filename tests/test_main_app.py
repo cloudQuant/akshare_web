@@ -15,7 +15,8 @@ class TestHealthCheck:
     @pytest.mark.asyncio
     async def test_health_check(self, test_client: AsyncClient):
         """Test health check endpoint."""
-        response = await test_client.get("/health")
+        with patch("app.core.database.check_db_connection", new_callable=AsyncMock, return_value=True):
+            response = await test_client.get("/health")
         assert response.status_code == 200
         data = response.json()
         assert data["status"] in ("healthy", "degraded")  # scheduler not running in test

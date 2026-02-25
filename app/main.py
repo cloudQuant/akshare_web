@@ -27,13 +27,8 @@ from app.services.scheduler import task_scheduler
 TESTING = os.getenv("TESTING", "false").lower() == "true"
 
 # Initialize rate limiter (only in production)
-if not TESTING:
-    from slowapi import Limiter
-    from slowapi.util import get_remote_address
-    from slowapi.errors import RateLimitExceeded
-    limiter = Limiter(key_func=get_remote_address)
-else:
-    limiter = None
+from app.api.rate_limit import get_limiter
+limiter = get_limiter()
 
 
 @asynccontextmanager
@@ -81,6 +76,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Attach rate limiter to app state (required by slowapi)
+if limiter is not None:
+    app.state.limiter = limiter
+
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
@@ -89,6 +88,11 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
 )
+
+# Request logging middleware (skip in testing to reduce noise)
+if not TESTING:
+    from app.middleware.request_logging import RequestLoggingMiddleware
+    app.add_middleware(RequestLoggingMiddleware)
 
 # Rate limit exception handler (only in production)
 if not TESTING:
@@ -103,7 +107,33 @@ if not TESTING:
         )
 
 
-# Include API routes
+# Global exception handlers for structured error responses
+@app.exception_handler(ValueError)
+async def value_error_handler(request: Request, exc: ValueError):
+    """Handle ValueError with structured response."""
+    logger.warning(f"ValueError: {exc}")
+    return JSONResponse(
+        status_code=400,
+        content={"success": False, "message": str(exc), "error_code": "VALUE_ERROR"},
+    )
+
+
+@app.exception_handler(Exception)
+async def generic_exception_handler(request: Request, exc: Exception):
+    """Handle uncaught exceptions with structured response."""
+    logger.error(f"Unhandled exception: {type(exc).__name__}: {exc}")
+    return JSONResponse(
+        status_code=500,
+        content={
+            "success": False,
+            "message": "Internal server error",
+            "error_code": "INTERNAL_ERROR",
+        },
+    )
+
+
+# Include API routes (v1 is the canonical prefix, /api kept for backward compatibility)
+app.include_router(api_router, prefix="/api/v1")
 app.include_router(api_router, prefix="/api")
 
 

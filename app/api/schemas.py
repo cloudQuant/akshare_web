@@ -132,6 +132,17 @@ class UserUpdateRequest(BaseModel):
     is_verified: bool | None = None
 
 
+class ResetPasswordRequest(BaseModel):
+    """Reset password request schema."""
+
+    new_password: str = Field(
+        ...,
+        min_length=6,
+        max_length=100,
+        description="New password for the user",
+    )
+
+
 # Interface schemas
 class CategoryResponse(BaseModel):
     """Interface category response schema."""

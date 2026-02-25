@@ -170,6 +170,52 @@ def check_health() -> None:
     asyncio.run(_check())
 
 
+@cli.command()
+@click.option("--message", "-m", required=True, help="Migration message")
+def db_migrate(message: str) -> None:
+    """Generate a new Alembic migration from model changes."""
+    from alembic.config import Config
+    from alembic import command
+
+    alembic_cfg = Config("alembic.ini")
+    command.revision(alembic_cfg, message=message, autogenerate=True)
+    click.echo(f"Migration generated: {message}")
+
+
+@cli.command()
+@click.option("--revision", default="head", help="Target revision (default: head)")
+def db_upgrade(revision: str) -> None:
+    """Apply database migrations up to a revision."""
+    from alembic.config import Config
+    from alembic import command
+
+    alembic_cfg = Config("alembic.ini")
+    command.upgrade(alembic_cfg, revision)
+    click.echo(f"Database upgraded to: {revision}")
+
+
+@cli.command()
+@click.option("--revision", default="-1", help="Target revision (default: -1 = one step back)")
+def db_downgrade(revision: str) -> None:
+    """Revert database migrations."""
+    from alembic.config import Config
+    from alembic import command
+
+    alembic_cfg = Config("alembic.ini")
+    command.downgrade(alembic_cfg, revision)
+    click.echo(f"Database downgraded to: {revision}")
+
+
+@cli.command()
+def db_history() -> None:
+    """Show migration history."""
+    from alembic.config import Config
+    from alembic import command
+
+    alembic_cfg = Config("alembic.ini")
+    command.history(alembic_cfg, verbose=True)
+
+
 def main() -> None:
     """Main CLI entry point."""
     cli()

@@ -22,13 +22,7 @@ from app.api.schemas import (
     TableSchemaResponse,
 )
 from app.models.data_table import DataTable
-
-
-def _safe_table_name(name: str) -> str:
-    """Validate and quote table name to prevent SQL injection."""
-    if not re.match(r'^[A-Za-z_][A-Za-z0-9_]*$', name):
-        raise ValueError(f"Invalid table name: {name}")
-    return f"`{name}`"
+from app.utils.helpers import safe_table_name as _safe_table_name
 
 
 router = APIRouter()

@@ -206,19 +206,4 @@ async def delete_executions(
 
 def _execution_to_dict(execution) -> dict[str, Any]:
     """Convert execution model to dictionary."""
-    return {
-        "id": execution.id,
-        "execution_id": execution.execution_id,
-        "task_id": execution.task_id,
-        "script_id": execution.script_id,
-        "status": execution.status.value,
-        "start_time": execution.start_time.isoformat() if execution.start_time else None,
-        "end_time": execution.end_time.isoformat() if execution.end_time else None,
-        "duration": float(execution.duration) if execution.duration else None,
-        "rows_before": execution.rows_before,
-        "rows_after": execution.rows_after,
-        "error_message": execution.error_message,
-        "retry_count": execution.retry_count,
-        "triggered_by": execution.triggered_by.value,
-        "created_at": execution.created_at.isoformat() if execution.created_at else None,
-    }
+    return execution.to_dict()

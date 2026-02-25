@@ -85,25 +85,7 @@ SCHEDULE_TEMPLATES = [
 
 def _task_to_dict(task: ScheduledTask, script_name: str | None = None) -> dict[str, Any]:
     """Convert task model to dictionary."""
-    return {
-        "id": task.id,
-        "name": task.name,
-        "description": task.description,
-        "user_id": task.user_id,
-        "script_id": task.script_id,
-        "script_name": script_name,
-        "schedule_type": task.schedule_type.value,
-        "schedule_expression": task.schedule_expression,
-        "parameters": task.parameters,
-        "is_active": task.is_active,
-        "retry_on_failure": task.retry_on_failure,
-        "max_retries": task.max_retries,
-        "timeout": task.timeout,
-        "last_execution_at": task.last_execution_at.isoformat() if task.last_execution_at else None,
-        "next_execution_at": task.next_execution_at.isoformat() if task.next_execution_at else None,
-        "created_at": task.created_at.isoformat() if task.created_at else None,
-        "updated_at": task.updated_at.isoformat() if task.updated_at else None,
-    }
+    return task.to_dict(script_name=script_name)
 
 
 class TaskCreateRequest(BaseModel):
@@ -229,36 +211,21 @@ async def list_tasks(
     result = await db.execute(query)
     tasks = result.scalars().all()
 
-    # Get script info
+    # Batch-load script names to avoid N+1 queries
+    script_ids = list({t.script_id for t in tasks})
+    script_name_map: dict[str, str | None] = {}
+    if script_ids:
+        scripts_result = await db.execute(
+            select(DataScript.script_id, DataScript.script_name).where(
+                DataScript.script_id.in_(script_ids)
+            )
+        )
+        script_name_map = {row.script_id: row.script_name for row in scripts_result}
+
     items = []
     for task in tasks:
-        script = await db.execute(
-            select(DataScript).where(DataScript.script_id == task.script_id)
-        )
-        script_obj = script.scalar_one_or_none()
-        script_name = script_obj.script_name if script_obj else None
-
-        items.append(
-            {
-                "id": task.id,
-                "name": task.name,
-                "description": task.description,
-                "user_id": task.user_id,
-                "script_id": task.script_id,
-                "script_name": script_name,
-                "schedule_type": task.schedule_type.value,
-                "schedule_expression": task.schedule_expression,
-                "parameters": task.parameters,
-                "is_active": task.is_active,
-                "retry_on_failure": task.retry_on_failure,
-                "max_retries": task.max_retries,
-                "timeout": task.timeout,
-                "last_execution_at": task.last_execution_at.isoformat() if task.last_execution_at else None,
-                "next_execution_at": task.next_execution_at.isoformat() if task.next_execution_at else None,
-                "created_at": task.created_at.isoformat() if task.created_at else None,
-                "updated_at": task.updated_at.isoformat() if task.updated_at else None,
-            }
-        )
+        script_name = script_name_map.get(task.script_id)
+        items.append(task.to_dict(script_name=script_name))
 
     return APIResponse(
         success=True,
@@ -522,4 +489,44 @@ async def trigger_task(
         success=True,
         message="Task triggered successfully",
         data={"execution_id": execution_id},
+    )
+
+
+@router.post("/{task_id}/cancel")
+async def cancel_task(
+    task_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> APIResponse:
+    """Cancel a running task execution."""
+    from app.models.user import UserRole
+
+    result = await db.execute(
+        select(ScheduledTask).where(ScheduledTask.id == task_id)
+    )
+    task = result.scalar_one_or_none()
+
+    if task is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Scheduled task not found",
+        )
+
+    if not await _can_access_task(current_user.id, task, current_user.role == UserRole.ADMIN):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied",
+        )
+
+    cancelled = await task_scheduler.cancel_task(task_id)
+
+    if not cancelled:
+        return APIResponse(
+            success=False,
+            message="No running execution found for this task",
+        )
+
+    return APIResponse(
+        success=True,
+        message="Task execution cancelled",
     )

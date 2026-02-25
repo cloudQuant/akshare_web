@@ -52,26 +52,7 @@ class ScriptUpdateRequest(BaseModel):
 
 def _script_to_dict(script: DataScript) -> dict[str, Any]:
     """Convert script model to dictionary."""
-    return {
-        "id": script.id,
-        "script_id": script.script_id,
-        "script_name": script.script_name,
-        "category": script.category,
-        "sub_category": script.sub_category,
-        "frequency": script.frequency.value if script.frequency else None,
-        "description": script.description,
-        "source": script.source,
-        "target_table": script.target_table,
-        "module_path": script.module_path,
-        "function_name": script.function_name,
-        "estimated_duration": script.estimated_duration,
-        "timeout": script.timeout,
-        "is_active": script.is_active,
-        "is_custom": script.is_custom,
-        "parameters": script.dependencies,
-        "created_at": script.created_at.isoformat() if script.created_at else None,
-        "updated_at": script.updated_at.isoformat() if script.updated_at else None,
-    }
+    return script.to_dict()
 
 
 @router.get("/")

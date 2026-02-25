@@ -221,8 +221,9 @@ class TestResetPassword:
 
         headers = {"Authorization": f"Bearer {test_admin_token}"}
         response = await test_client.post(
-            f"/api/users/{user.id}/reset-password?new_password=NewPassword123!",
+            f"/api/users/{user.id}/reset-password",
             headers=headers,
+            json={"new_password": "NewPassword123!"},
         )
         assert response.status_code == 200
 
@@ -231,7 +232,8 @@ class TestResetPassword:
         """Test resetting password for non-existent user."""
         headers = {"Authorization": f"Bearer {test_admin_token}"}
         response = await test_client.post(
-            "/api/users/99999/reset-password?new_password=NewPass123!",
+            "/api/users/99999/reset-password",
             headers=headers,
+            json={"new_password": "NewPass123!"},
         )
         assert response.status_code == 404

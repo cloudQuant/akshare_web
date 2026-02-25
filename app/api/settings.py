@@ -19,6 +19,40 @@ from app.models.user import User
 router = APIRouter()
 
 
+def _update_env_file(env_path, updates: dict[str, str]) -> None:
+    """Update or create entries in a .env file.
+
+    Reads the existing file, replaces matching KEY=value lines,
+    appends new keys, and writes back atomically.
+    """
+    from pathlib import Path
+
+    path = Path(env_path)
+    lines: list[str] = []
+    updated_keys: set[str] = set()
+
+    if path.exists():
+        lines = path.read_text().splitlines(keepends=True)
+
+    new_lines: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#") and "=" in stripped:
+            key = stripped.split("=", 1)[0].strip()
+            if key in updates:
+                new_lines.append(f"{key}={updates[key]}\n")
+                updated_keys.add(key)
+                continue
+        new_lines.append(line if line.endswith("\n") else line + "\n")
+
+    # Append any keys not already in the file
+    for key, value in updates.items():
+        if key not in updated_keys:
+            new_lines.append(f"{key}={value}\n")
+
+    path.write_text("".join(new_lines))
+
+
 class DatabaseConfigResponse(BaseModel):
     """Database configuration response (without password)."""
 
@@ -188,18 +222,36 @@ async def update_database_config(
 
     Requires admin privileges.
     """
-    # In production, this would update a configuration file or environment
-    # For now, we'll return a message indicating manual update is needed
+    # Determine which env keys to update
+    if request.is_warehouse:
+        env_updates = {
+            "DATA_MYSQL_HOST": request.host,
+            "DATA_MYSQL_PORT": str(request.port),
+            "DATA_MYSQL_DATABASE": request.database,
+            "DATA_MYSQL_USER": request.user,
+            "DATA_MYSQL_PASSWORD": request.password,
+        }
+    else:
+        env_updates = {
+            "MYSQL_HOST": request.host,
+            "MYSQL_PORT": str(request.port),
+            "MYSQL_DATABASE": request.database,
+            "MYSQL_USER": request.user,
+            "MYSQL_PASSWORD": request.password,
+        }
 
-    # TODO: Implement configuration persistence
-    # Options:
-    # 1. Update .env file (requires file system access)
-    # 2. Store in database settings table
-    # 3. Use a configuration service (Consul, etcd, etc.)
+    # Persist to .env file
+    from pathlib import Path
 
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="配置更新功能暂未实现。请手动更新 .env 文件并重启服务。",
+    env_path = Path(__file__).resolve().parent.parent.parent / ".env"
+    _update_env_file(env_path, env_updates)
+
+    return DatabaseConfigResponse(
+        host=request.host,
+        port=request.port,
+        database=request.database,
+        user=request.user,
+        is_warehouse=request.is_warehouse,
     )
 
 

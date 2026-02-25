@@ -50,13 +50,53 @@ class TestTestConnectionDirect:
 
 class TestUpdateConfigDirect:
     @pytest.mark.asyncio
-    async def test_update_not_implemented(self, test_db):
+    async def test_update_writes_env(self, test_db):
         from app.api.settings import update_database_config, DatabaseConfigRequest
+        from unittest.mock import patch, ANY
+
         admin = await _admin(test_db)
-        req = DatabaseConfigRequest(host="localhost", port=3306, database="test", user="root", password="pass")
-        with pytest.raises(HTTPException) as exc:
-            await update_database_config(request=req, current_admin=admin)
-        assert exc.value.status_code == 501
+        req = DatabaseConfigRequest(host="newhost", port=3307, database="newdb", user="newuser", password="newpass")
+
+        with patch("app.api.settings._update_env_file") as mock_update:
+            result = await update_database_config(request=req, current_admin=admin)
+            mock_update.assert_called_once()
+            call_args = mock_update.call_args
+            updates = call_args[0][1]
+            assert updates["MYSQL_HOST"] == "newhost"
+            assert updates["MYSQL_PORT"] == "3307"
+        assert result.host == "newhost"
+        assert result.port == 3307
+
+    @pytest.mark.asyncio
+    async def test_update_warehouse_writes_env(self, test_db):
+        from app.api.settings import update_database_config, DatabaseConfigRequest
+        from unittest.mock import patch
+
+        admin = await _admin(test_db)
+        req = DatabaseConfigRequest(host="wh", port=3308, database="whdb", user="whu", password="whp", is_warehouse=True)
+
+        with patch("app.api.settings._update_env_file") as mock_update:
+            result = await update_database_config(request=req, current_admin=admin)
+            updates = mock_update.call_args[0][1]
+            assert "DATA_MYSQL_HOST" in updates
+        assert result.is_warehouse is True
+
+    def test_update_env_file_helper(self, tmp_path):
+        from app.api.settings import _update_env_file
+        env_file = tmp_path / ".env"
+        env_file.write_text("HOST=old\n# comment\nPORT=3306\n")
+        _update_env_file(env_file, {"HOST": "new", "PORT": "3307", "EXTRA": "val"})
+        content = env_file.read_text()
+        assert "HOST=new" in content
+        assert "PORT=3307" in content
+        assert "EXTRA=val" in content
+        assert "# comment" in content
+
+    def test_update_env_file_creates_new(self, tmp_path):
+        from app.api.settings import _update_env_file
+        env_file = tmp_path / ".env_new"
+        _update_env_file(env_file, {"KEY": "value"})
+        assert "KEY=value" in env_file.read_text()
 
 
 class TestWarehouseTestConnectionDirect:

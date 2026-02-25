@@ -29,6 +29,7 @@ class TaskScheduler:
     def __init__(self):
         self._running = False
         self.scheduler_service = None
+        self._running_tasks: dict[int, asyncio.Task] = {}  # task_id -> asyncio.Task
 
     @property
     def is_running(self) -> bool:
@@ -191,6 +192,7 @@ class TaskScheduler:
                 # Get table row count before execution
                 script = await script_service.get_script(task.script_id)
                 rows_before = None
+                provider = None
                 if script and script.target_table:
                     from app.data_fetch.providers.akshare_provider import AkshareProvider
                     provider = AkshareProvider()
@@ -204,11 +206,12 @@ class TaskScheduler:
                     timeout=timeout,
                 )
 
-                # Get row count after execution
+                # Get row count after execution (reuse provider)
                 rows_after = None
                 if script and script.target_table:
-                    from app.data_fetch.providers.akshare_provider import AkshareProvider
-                    provider = AkshareProvider()
+                    if provider is None:
+                        from app.data_fetch.providers.akshare_provider import AkshareProvider
+                        provider = AkshareProvider()
                     rows_after = provider.get_table_row_count(script.target_table)
 
                 # Update execution result
@@ -312,10 +315,51 @@ class TaskScheduler:
                 operator_id=user_id,
             )
 
-            # Execute in background
-            asyncio.create_task(self._execute_with_retry(task, db))
+            # Execute in background with cancellation support
+            bg_task = asyncio.create_task(self._execute_with_retry(task, db))
+            self._running_tasks[task.id] = bg_task
+            bg_task.add_done_callback(lambda t, tid=task.id: self._running_tasks.pop(tid, None))
 
             return execution.execution_id
+
+    async def cancel_task(self, task_id: int) -> bool:
+        """Cancel a running task execution.
+
+        Returns True if a running task was found and cancelled.
+        """
+        bg_task = self._running_tasks.pop(task_id, None)
+        if bg_task is None or bg_task.done():
+            return False
+
+        bg_task.cancel()
+        logger.info(f"Cancelled running task {task_id}")
+
+        # Mark the latest running execution as cancelled
+        try:
+            async with async_session_maker() as db:
+                from sqlalchemy import select
+                from app.models.task import TaskExecution
+                result = await db.execute(
+                    select(TaskExecution)
+                    .where(TaskExecution.task_id == task_id)
+                    .where(TaskExecution.status == TaskStatus.RUNNING)
+                    .order_by(TaskExecution.created_at.desc())
+                    .limit(1)
+                )
+                execution = result.scalar_one_or_none()
+                if execution:
+                    execution.status = TaskStatus.CANCELLED
+                    execution.end_time = datetime.now(UTC)
+                    execution.error_message = "Cancelled by user"
+                    await db.commit()
+        except Exception as e:
+            logger.error(f"Error updating cancelled execution for task {task_id}: {e}")
+
+        return True
+
+    def get_running_task_ids(self) -> list[int]:
+        """Get list of currently running task IDs."""
+        return [tid for tid, t in self._running_tasks.items() if not t.done()]
 
 
 # Global scheduler instance

@@ -38,7 +38,7 @@ class Base(DeclarativeBase):
 
 # Create async engine
 engine = create_async_engine(
-    settings.database_url.replace("+pymysql", "+aiomysql"),
+    settings.database_url,
     pool_size=settings.database_pool_size,
     max_overflow=settings.database_max_overflow,
     echo=settings.app_debug,
@@ -56,7 +56,7 @@ async_session_maker = async_sessionmaker(
 
 # Data warehouse async engine (for akshare data tables)
 data_engine = create_async_engine(
-    settings.data_database_url.replace("+pymysql", "+aiomysql"),
+    settings.data_database_url_async,
     pool_size=settings.database_pool_size,
     max_overflow=settings.database_max_overflow,
     echo=settings.app_debug,

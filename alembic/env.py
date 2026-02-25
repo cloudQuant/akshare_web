@@ -15,7 +15,7 @@ from alembic import context
 # Import models and settings
 from app.core.config import settings
 from app.core.database import Base
-from app.models import User, DataInterface, ScheduledTask, DataTable  # noqa: F401
+import app.models  # noqa: F401 — import all models so autogenerate detects them
 
 # Alembic config object
 config = context.config

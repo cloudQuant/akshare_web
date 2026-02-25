@@ -1,6 +1,5 @@
 """Execution service for monitoring task executions"""
 
-import logging
 import uuid
 from datetime import UTC, datetime
 
@@ -10,7 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from app.models.task import TaskExecution, TaskStatus, TriggeredBy, ScheduledTask
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class ExecutionService:

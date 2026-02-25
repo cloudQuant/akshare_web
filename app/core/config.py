@@ -123,6 +123,20 @@ class Settings(BaseSettings):
     akshare_call_timeout: int = Field(default=120, description="akshare call timeout")
     akshare_retry_attempts: int = Field(default=3, description="akshare retry attempts")
 
+    @field_validator("secret_key", mode="after")
+    @classmethod
+    def validate_secret_key(cls, v: str, info) -> str:
+        """Warn or reject default secret key based on environment."""
+        if v == "change-this-secret-key":
+            import os
+            env = os.getenv("APP_ENV", "development")
+            if env == "production":
+                raise ValueError(
+                    "SECURITY ERROR: Default secret key detected in production! "
+                    "Set SECRET_KEY to a unique random value."
+                )
+        return v
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, v: str | list[str]) -> list[str]:
@@ -162,10 +176,17 @@ class Settings(BaseSettings):
 
     @property
     def data_database_url(self) -> str:
-        """Get data warehouse database URL (for akshare scripts)."""
+        """Get data warehouse database URL (sync, for akshare scripts)."""
         password = quote_plus(self.data_mysql_password)
         host = f"{self.data_mysql_host}:{self.data_mysql_port}"
         return f"mysql+pymysql://{self.data_mysql_user}:{password}@{host}/{self.data_mysql_database}"
+
+    @property
+    def data_database_url_async(self) -> str:
+        """Get data warehouse async database URL."""
+        password = quote_plus(self.data_mysql_password)
+        host = f"{self.data_mysql_host}:{self.data_mysql_port}"
+        return f"mysql+aiomysql://{self.data_mysql_user}:{password}@{host}/{self.data_mysql_database}"
 
 
 @lru_cache

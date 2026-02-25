@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.interface import DataInterface
 from app.models.data_table import DataTable
 from app.models.task import TaskExecution, TaskStatus
+from app.utils.helpers import generate_table_name, clean_column_names, safe_table_name
 
 
 class DataAcquisitionService:
@@ -89,7 +90,7 @@ class DataAcquisitionService:
 
             if data is None or (isinstance(data, pd.DataFrame) and data.empty):
                 logger.warning(f"Interface {interface.name} returned no data")
-                execution.status = TaskStatus.SUCCESS
+                execution.status = TaskStatus.COMPLETED
                 execution.completed_at = datetime.now(UTC)
                 execution.rows_affected = 0
                 await db.commit()
@@ -147,7 +148,7 @@ class DataAcquisitionService:
                     kwargs[param_name] = param_value
 
             # Call function (run in thread pool for blocking calls)
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             result = await loop.run_in_executor(
                 None,
                 lambda: func(**kwargs) if kwargs else func()
@@ -221,23 +222,11 @@ class DataAcquisitionService:
 
     def _generate_table_name(self, interface_name: str) -> str:
         """Generate SQL table name from interface name."""
-        # Replace dots and special characters
-        clean_name = interface_name.replace(".", "_").replace("-", "_")
-        # Add prefix
-        return f"ak_{clean_name}"
+        return generate_table_name(interface_name)
 
     def _clean_column_names(self, columns) -> list[str]:
         """Clean DataFrame column names for SQL."""
-        cleaned = []
-        for col in columns:
-            # Convert to string, lowercase, replace special chars
-            clean = str(col).lower().replace(" ", "_").replace("-", "_")
-            clean = "".join(c if c.isalnum() or c == "_" else "_" for c in clean)
-            # Limit length
-            if len(clean) > 64:
-                clean = clean[:64]
-            cleaned.append(clean)
-        return cleaned
+        return clean_column_names(columns)
 
     async def _create_table_if_not_exists(
         self,
@@ -269,8 +258,9 @@ class DataAcquisitionService:
             "created_at DATETIME DEFAULT CURRENT_TIMESTAMP"
         ]
 
+        quoted_name = safe_table_name(table_name)
         create_sql = f"""
-            CREATE TABLE IF NOT EXISTS `{table_name}` (
+            CREATE TABLE IF NOT EXISTS {quoted_name} (
                 {', '.join(all_columns)},
                 INDEX idx_created_at (created_at)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
@@ -297,8 +287,9 @@ class DataAcquisitionService:
         columns_str = ", ".join([f"`{col}`" for col in columns])
         placeholders = ", ".join([f":{col}" for col in columns])
 
+        quoted_name = safe_table_name(table_name)
         insert_sql = f"""
-            INSERT INTO `{table_name}` ({columns_str})
+            INSERT INTO {quoted_name} ({columns_str})
             VALUES ({placeholders})
         """
 
@@ -332,8 +323,9 @@ class DataAcquisitionService:
         table_meta = result.scalar_one_or_none()
 
         # Get current total row count
+        quoted_name = safe_table_name(table_name)
         count_result = await db.execute(
-            text(f"SELECT COUNT(*) FROM `{table_name}`")
+            text(f"SELECT COUNT(*) FROM {quoted_name}")
         )
         total_rows = count_result.scalar() or 0
 

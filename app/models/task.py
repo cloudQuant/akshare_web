@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import BigInteger, Boolean, DateTime, Enum, ForeignKey, Integer, JSON, Numeric, String, Text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 
@@ -115,6 +115,28 @@ class ScheduledTask(Base):
         nullable=False,
     )
 
+    def to_dict(self, script_name: str | None = None) -> dict[str, Any]:
+        """Serialize to dictionary."""
+        return {
+            "id": self.id,
+            "name": self.name,
+            "description": self.description,
+            "user_id": self.user_id,
+            "script_id": self.script_id,
+            "script_name": script_name,
+            "schedule_type": self.schedule_type.value,
+            "schedule_expression": self.schedule_expression,
+            "parameters": self.parameters,
+            "is_active": self.is_active,
+            "retry_on_failure": self.retry_on_failure,
+            "max_retries": self.max_retries,
+            "timeout": self.timeout,
+            "last_execution_at": self.last_execution_at.isoformat() if self.last_execution_at else None,
+            "next_execution_at": self.next_execution_at.isoformat() if self.next_execution_at else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
     def __repr__(self) -> str:
         return f"<ScheduledTask(id={self.id}, name={self.name}, active={self.is_active})>"
 
@@ -202,6 +224,27 @@ class TaskExecution(Base):
         onupdate=lambda: datetime.now(UTC),
         nullable=False,
     )
+
+    task = relationship("ScheduledTask", foreign_keys=[task_id], lazy="select")
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to dictionary."""
+        return {
+            "id": self.id,
+            "execution_id": self.execution_id,
+            "task_id": self.task_id,
+            "script_id": self.script_id,
+            "status": self.status.value,
+            "start_time": self.start_time.isoformat() if self.start_time else None,
+            "end_time": self.end_time.isoformat() if self.end_time else None,
+            "duration": float(self.duration) if self.duration else None,
+            "rows_before": self.rows_before,
+            "rows_after": self.rows_after,
+            "error_message": self.error_message,
+            "retry_count": self.retry_count,
+            "triggered_by": self.triggered_by.value,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
 
     def __repr__(self) -> str:
         return f"<TaskExecution(id={self.id}, execution_id={self.execution_id}, status={self.status.value})>"

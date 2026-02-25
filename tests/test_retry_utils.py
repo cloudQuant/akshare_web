@@ -169,9 +169,8 @@ class TestAsyncRetryOnException:
         from app.data_fetch.utils.retry import async_retry_on_exception
 
         assert async_retry_on_exception is not None
-        # It's an async function that returns a decorator
-        import asyncio
-        assert asyncio.iscoroutinefunction(async_retry_on_exception)
+        # It's a regular function (decorator factory) that returns a decorator
+        assert callable(async_retry_on_exception)
 
 
 class TestRetryIntegration:

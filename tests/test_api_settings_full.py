@@ -89,17 +89,21 @@ class TestUpdateDatabaseConfig:
 
     @pytest.mark.asyncio
     async def test_update_db_config(self, test_client: AsyncClient, test_admin_token: str):
-        """Test updating database config (not implemented)."""
+        """Test updating database config persists to .env."""
+        from unittest.mock import patch
         headers = {"Authorization": f"Bearer {test_admin_token}"}
-        response = await test_client.put(
-            "/api/settings/database",
-            headers=headers,
-            json={
-                "host": "localhost",
-                "port": 3306,
-                "database": "test",
-                "user": "test",
-                "password": "test",
-            },
-        )
-        assert response.status_code == 501
+        with patch("app.api.settings._update_env_file"):
+            response = await test_client.put(
+                "/api/settings/database",
+                headers=headers,
+                json={
+                    "host": "localhost",
+                    "port": 3306,
+                    "database": "test",
+                    "user": "test",
+                    "password": "test",
+                },
+            )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["host"] == "localhost"

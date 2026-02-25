@@ -173,7 +173,9 @@ class TestResetPasswordDirect:
         from app.api.users import reset_user_password
         admin = await _make_admin(test_db)
         user = await _make_user(test_db)
-        result = await reset_user_password(user_id=user.id, new_password="NewPass123!", current_admin=admin, db=test_db)
+        from app.api.schemas import ResetPasswordRequest
+        body = ResetPasswordRequest(new_password="NewPass123!")
+        result = await reset_user_password(user_id=user.id, body=body, current_admin=admin, db=test_db)
         assert result.success is True
 
     @pytest.mark.asyncio
@@ -181,5 +183,7 @@ class TestResetPasswordDirect:
         from app.api.users import reset_user_password
         admin = await _make_admin(test_db)
         with pytest.raises(HTTPException) as exc:
-            await reset_user_password(user_id=99999, new_password="X", current_admin=admin, db=test_db)
+            from app.api.schemas import ResetPasswordRequest
+            body = ResetPasswordRequest(new_password="Xaaaaa")
+            await reset_user_password(user_id=99999, body=body, current_admin=admin, db=test_db)
         assert exc.value.status_code == 404

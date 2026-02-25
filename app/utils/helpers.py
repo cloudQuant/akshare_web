@@ -105,6 +105,24 @@ def format_duration(milliseconds: int | None) -> str:
         return f"{minutes:.1f}m"
 
 
+def safe_table_name(name: str) -> str:
+    """
+    Validate and quote table name to prevent SQL injection.
+
+    Args:
+        name: Table name to validate
+
+    Returns:
+        Backtick-quoted safe table name
+
+    Raises:
+        ValueError: If table name contains invalid characters
+    """
+    if not re.match(r'^[A-Za-z_][A-Za-z0-9_]*$', name):
+        raise ValueError(f"Invalid table name: {name}")
+    return f"`{name}`"
+
+
 def truncate_string(text: str, max_length: int = 50, suffix: str = "...") -> str:
     """
     Truncate string to maximum length.

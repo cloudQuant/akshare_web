@@ -5,7 +5,6 @@ Notes:
 - APScheduler jobs are kept in-memory and should be re-registered on app startup.
 """
 
-import logging
 from collections.abc import Callable
 from datetime import datetime
 
@@ -16,7 +15,7 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class SchedulerService:

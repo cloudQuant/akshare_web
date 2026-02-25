@@ -15,6 +15,7 @@ from app.api.schemas import (
     APIResponse,
     PaginatedParams,
     PaginatedResponse,
+    ResetPasswordRequest,
     UserResponse,
     UserUpdateRequest,
 )
@@ -205,7 +206,7 @@ async def delete_user(
 @router.post("/{user_id}/reset-password", response_model=APIResponse)
 async def reset_user_password(
     user_id: int,
-    new_password: str,
+    body: ResetPasswordRequest,
     current_admin: CurrentAdmin,
     db: AsyncSession = Depends(get_db),
 ):
@@ -223,7 +224,7 @@ async def reset_user_password(
             detail="User not found",
         )
 
-    user.hashed_password = hash_password(new_password)
+    user.hashed_password = hash_password(body.new_password)
     await db.commit()
 
     return APIResponse(

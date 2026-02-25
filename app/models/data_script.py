@@ -100,5 +100,28 @@ class DataScript(Base):
         nullable=False,
     )
 
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to dictionary."""
+        return {
+            "id": self.id,
+            "script_id": self.script_id,
+            "script_name": self.script_name,
+            "category": self.category,
+            "sub_category": self.sub_category,
+            "frequency": self.frequency.value if self.frequency else None,
+            "description": self.description,
+            "source": self.source,
+            "target_table": self.target_table,
+            "module_path": self.module_path,
+            "function_name": self.function_name,
+            "estimated_duration": self.estimated_duration,
+            "timeout": self.timeout,
+            "is_active": self.is_active,
+            "is_custom": self.is_custom,
+            "parameters": self.dependencies,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
     def __repr__(self) -> str:
         return f"<DataScript(script_id={self.script_id}, name={self.script_name})>"
