@@ -11,6 +11,19 @@ const request: AxiosInstance = axios.create({
   },
 })
 
+// Token refresh lock – prevents concurrent refresh requests
+let isRefreshing = false
+let refreshSubscribers: Array<(token: string) => void> = []
+
+function onTokenRefreshed(token: string) {
+  refreshSubscribers.forEach((cb) => cb(token))
+  refreshSubscribers = []
+}
+
+function addRefreshSubscriber(cb: (token: string) => void) {
+  refreshSubscribers.push(cb)
+}
+
 // Request interceptor
 request.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
@@ -42,25 +55,46 @@ request.interceptors.response.use(
 
     if (error.response) {
       switch (error.response.status) {
-        case 401:
-          // Token expired or invalid
+        case 401: {
           // Prevent infinite loop: check if this is a refresh token request
           const isRefreshRequest = error.config?.url?.includes('/refresh')
 
           if (!isRefreshRequest && authStore.refreshToken) {
+            if (isRefreshing) {
+              // Another request is already refreshing – wait for it
+              return new Promise((resolve) => {
+                addRefreshSubscriber((newToken: string) => {
+                  if (error.config) {
+                    error.config.headers.Authorization = `Bearer ${newToken}`
+                    resolve(request(error.config))
+                  }
+                })
+              })
+            }
+
+            isRefreshing = true
             try {
               await authStore.refreshAccessToken()
-              // Retry original request
-              return request(error.config!)
+              const newToken = authStore.accessToken || ''
+              onTokenRefreshed(newToken)
+              // Retry original request with new token
+              if (error.config) {
+                error.config.headers.Authorization = `Bearer ${newToken}`
+                return request(error.config)
+              }
             } catch (refreshError) {
+              refreshSubscribers = []
               authStore.logout()
               window.location.href = '/login'
+            } finally {
+              isRefreshing = false
             }
           } else {
             authStore.logout()
             window.location.href = '/login'
           }
           break
+        }
         case 403:
           ElMessage.error('权限不足')
           break

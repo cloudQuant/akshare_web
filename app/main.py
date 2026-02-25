@@ -123,8 +123,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     await init_db()
 
-    # Start task scheduler
-    await task_scheduler.start()
+    # Start task scheduler (only safe in single-worker mode or with external job store)
+    if settings.workers > 1 and not settings.redis_url:
+        logger.warning(
+            f"⚠️  Scheduler DISABLED: running {settings.workers} workers without Redis. "
+            "APScheduler in-memory store would cause duplicate task execution. "
+            "Set WORKERS=1 or configure REDIS_URL."
+        )
+    else:
+        await task_scheduler.start()
 
     logger.info("Application startup complete")
 

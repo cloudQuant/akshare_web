@@ -105,6 +105,24 @@ def format_duration(milliseconds: int | None) -> str:
         return f"{minutes:.1f}m"
 
 
+def safe_column_name(name: str) -> str:
+    """
+    Validate and quote column name to prevent SQL injection.
+
+    Args:
+        name: Column name to validate
+
+    Returns:
+        Backtick-quoted safe column name
+
+    Raises:
+        ValueError: If column name contains invalid characters
+    """
+    if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', name):
+        raise ValueError(f"Invalid column name: {name}")
+    return f"`{name}`"
+
+
 def safe_table_name(name: str) -> str:
     """
     Validate and quote table name to prevent SQL injection.

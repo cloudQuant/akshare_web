@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { User, AuthResponse, LoginRequest, RegisterRequest } from '@/types'
+import type { User, LoginRequest, RegisterRequest } from '@/types'
 import { authApi } from '@/api/auth'
 
 export const useAuthStore = defineStore(
@@ -28,7 +28,14 @@ export const useAuthStore = defineStore(
       const response = await authApi.register(data)
       accessToken.value = response.access_token
       refreshToken.value = response.refresh_token
-      user.value = response.user
+      // Register API may return partial user info (user_id, email) instead of full User object
+      if (response.user) {
+        user.value = response.user
+      } else {
+        // Fetch full user profile with the new token
+        const me = await authApi.getCurrentUser()
+        user.value = me as unknown as User
+      }
       persistAuth()
     }
 

@@ -74,7 +74,7 @@ async def list_tables(
         success=True,
         message="success",
         data={
-            "items": [item.dict() if hasattr(item, "dict") else item for item in items],
+            "items": [item.model_dump(mode="json") for item in items],
             "total": total,
             "page": params.page,
             "page_size": params.page_size,
@@ -192,7 +192,7 @@ async def get_table_data(
 
     # Query actual data from data warehouse
     try:
-        query = text(f"SELECT * FROM {_safe_table_name(table.table_name)} LIMIT :limit OFFSET :offset")
+        query = text(f"SELECT * FROM {_safe_table_name(table.table_name)} ORDER BY id LIMIT :limit OFFSET :offset")
         data_result = await data_db.execute(query, {"limit": limit, "offset": offset})
 
         # Get column names from cursor description

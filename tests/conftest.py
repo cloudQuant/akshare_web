@@ -152,23 +152,29 @@ async def test_user(test_client, test_user_data):
     return data["data"]["access_token"]
 
 
-@pytest_asyncio.fixture
-async def test_user_token(test_client):
-    """Create a test user and return auth token."""
-    user_data = {
-        "email": "testuser@example.com",
-        "password": "Password123!",
-        "password_confirm": "Password123!",
-    }
-    # Register user
-    await test_client.post("/api/auth/register", json=user_data)
+# Alias for backward compatibility
+test_user_token = test_user
 
-    # Login to get token
+
+async def _create_admin_and_login(test_client, test_db, email, password):
+    """Helper: create admin user directly and return access token."""
+    from app.models.user import User, UserRole
+    from app.core.security import hash_password
+
+    admin = User(
+        username=email.split("@")[0],
+        email=email,
+        hashed_password=hash_password(password),
+        role=UserRole.ADMIN,
+        is_active=True,
+    )
+    test_db.add(admin)
+    await test_db.commit()
+
     response = await test_client.post("/api/auth/login", json={
-        "email": user_data["email"],
-        "password": user_data["password"],
+        "email": email,
+        "password": password,
     })
-
     data = response.json()
     return data["data"]["access_token"]
 
@@ -176,58 +182,13 @@ async def test_user_token(test_client):
 @pytest_asyncio.fixture
 async def test_admin(test_client, test_admin_data, test_db):
     """Create a test admin user and return auth token."""
-    from app.models.user import User, UserRole
-    from app.core.security import hash_password
-
-    # Create admin directly
-    admin = User(
-        username="testadmin",
-        email=test_admin_data["email"],
-        hashed_password=hash_password(test_admin_data["password"]),
-        role=UserRole.ADMIN,
-        is_active=True,
+    return await _create_admin_and_login(
+        test_client, test_db, test_admin_data["email"], test_admin_data["password"]
     )
-    test_db.add(admin)
-    await test_db.commit()
-
-    # Login to get token
-    response = await test_client.post("/api/auth/login", json={
-        "email": test_admin_data["email"],
-        "password": test_admin_data["password"],
-    })
-
-    data = response.json()
-    return data["data"]["access_token"]
 
 
-@pytest_asyncio.fixture
-async def test_admin_token(test_client, test_db):
-    """Create a test admin user and return auth token."""
-    from app.models.user import User, UserRole
-    from app.core.security import hash_password
-
-    admin_email = "testadmin@example.com"
-    admin_password = "AdminPass123!"
-
-    # Create admin directly
-    admin = User(
-        username="testadmin",
-        email=admin_email,
-        hashed_password=hash_password(admin_password),
-        role=UserRole.ADMIN,
-        is_active=True,
-    )
-    test_db.add(admin)
-    await test_db.commit()
-
-    # Login to get token
-    response = await test_client.post("/api/auth/login", json={
-        "email": admin_email,
-        "password": admin_password,
-    })
-
-    data = response.json()
-    return data["data"]["access_token"]
+# Alias for backward compatibility
+test_admin_token = test_admin
 
 
 def get_auth_headers(token: str) -> dict:

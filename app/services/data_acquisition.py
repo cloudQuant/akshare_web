@@ -6,6 +6,7 @@ Handles execution of akshare data interface calls and database storage.
 
 import asyncio
 import functools
+import hashlib
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from typing import Any
@@ -19,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.interface import DataInterface
 from app.models.data_table import DataTable
 from app.models.task import TaskExecution, TaskStatus
-from app.utils.helpers import generate_table_name, clean_column_names, safe_table_name
+from app.utils.helpers import generate_table_name, clean_column_names, safe_column_name, safe_table_name
 
 
 class DataAcquisitionService:
@@ -260,11 +261,13 @@ class DataAcquisitionService:
                 max_len = min(max(int((max_len or 1) * 2), 255), 2000)
                 sql_type = f"VARCHAR({max_len})"
 
-            columns_defs.append(f"`{col}` {sql_type}")
+            columns_defs.append(f"{safe_column_name(col)} {sql_type}")
 
-        # Add ID and timestamp columns
+        # Add ID, row_hash (for dedup), and timestamp columns
         all_columns = ["id BIGINT AUTO_INCREMENT PRIMARY KEY"] + columns_defs + [
-            "created_at DATETIME DEFAULT CURRENT_TIMESTAMP"
+            "`row_hash` CHAR(32) NOT NULL",
+            "created_at DATETIME DEFAULT CURRENT_TIMESTAMP",
+            "UNIQUE KEY `uq_row_hash` (`row_hash`)",
         ]
 
         quoted_name = safe_table_name(table_name)
@@ -289,11 +292,17 @@ class DataAcquisitionService:
 
         # Prepare data for insertion (convert NaN/NaT to None for MySQL)
         data = data.where(pd.notna(data), None)
+
+        # Compute row_hash for deduplication (MD5 of all data columns)
+        data_cols = list(data.columns)
+        data["row_hash"] = data[data_cols].astype(str).apply(
+            lambda row: hashlib.md5("|".join(row.values).encode()).hexdigest(), axis=1
+        )
         records = data.to_dict("records")
 
-        # Build INSERT IGNORE statement to skip duplicate rows gracefully
-        columns = list(data.columns)
-        columns_str = ", ".join([f"`{col}`" for col in columns])
+        # Build INSERT IGNORE statement (duplicates rejected by UNIQUE row_hash)
+        columns = list(data.columns)  # includes row_hash
+        columns_str = ", ".join([safe_column_name(col) for col in columns])
         placeholders = ", ".join([f":{col}" for col in columns])
 
         quoted_name = safe_table_name(table_name)

@@ -3,7 +3,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import and_, delete, func, select, text, update
+from sqlalchemy import Integer, and_, case, delete, func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -199,48 +199,37 @@ class ExecutionService:
         if not end_date:
             end_date = datetime.now(UTC)
 
-        # 总执行次数
-        total_query = select(func.count(TaskExecution.id)).where(
-            and_(
-                TaskExecution.start_time >= start_date,
-                TaskExecution.start_time <= end_date,
-            )
-        )
-        total_result = await self.db.execute(total_query)
-        total_count = total_result.scalar() or 0
-
-        # 成功次数
-        success_query = select(func.count(TaskExecution.id)).where(
-            and_(
-                TaskExecution.start_time >= start_date,
-                TaskExecution.start_time <= end_date,
-                TaskExecution.status == TaskStatus.COMPLETED,
-            )
-        )
-        success_result = await self.db.execute(success_query)
-        success_count = success_result.scalar() or 0
-
-        # 失败次数
-        failed_count = total_count - success_count
-
-        # 平均执行时长
-        duration_query = select(func.avg(TaskExecution.duration)).where(
-            and_(
-                TaskExecution.start_time >= start_date,
-                TaskExecution.start_time <= end_date,
-                TaskExecution.status == TaskStatus.COMPLETED,
-            )
-        )
-        duration_result = await self.db.execute(duration_query)
-        avg_duration = duration_result.scalar() or 0
-
-        # 今日统计
         today_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
-        today_query = select(func.count(TaskExecution.id)).where(
-            TaskExecution.start_time >= today_start
+
+        # Single query for all stats to reduce database round-trips
+        stats_query = select(
+            func.count(TaskExecution.id).label("total_count"),
+            func.count(
+                case((TaskExecution.status == TaskStatus.COMPLETED, 1))
+            ).label("success_count"),
+            func.avg(
+                case(
+                    (TaskExecution.status == TaskStatus.COMPLETED, TaskExecution.duration),
+                )
+            ).label("avg_duration"),
+            func.count(
+                case((TaskExecution.start_time >= today_start, 1))
+            ).label("today_count"),
+        ).where(
+            and_(
+                TaskExecution.start_time >= start_date,
+                TaskExecution.start_time <= end_date,
+            )
         )
-        today_result = await self.db.execute(today_query)
-        today_count = today_result.scalar() or 0
+
+        result = await self.db.execute(stats_query)
+        row = result.one()
+
+        total_count = row.total_count or 0
+        success_count = row.success_count or 0
+        avg_duration = row.avg_duration or 0
+        today_count = row.today_count or 0
+        failed_count = total_count - success_count
 
         return {
             "total_count": total_count,
