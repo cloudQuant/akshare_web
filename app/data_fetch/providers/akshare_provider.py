@@ -20,6 +20,38 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 
+# Connection pool singleton
+_connection_pool = None
+_pool_lock = threading.Lock()
+
+
+def _get_connection_pool(db_config: dict):
+    """Get or create a connection pool singleton."""
+    global _connection_pool
+    if _connection_pool is not None:
+        return _connection_pool
+    with _pool_lock:
+        if _connection_pool is not None:
+            return _connection_pool
+        try:
+            from dbutils.pooled_db import PooledDB
+            _connection_pool = PooledDB(
+                creator=pymysql,
+                maxconnections=10,
+                mincached=2,
+                maxcached=5,
+                blocking=True,
+                **db_config,
+            )
+            _default_logger.info("MySQL connection pool created (DBUtils)")
+        except ImportError:
+            _default_logger.warning(
+                "DBUtils not installed, falling back to direct connections. "
+                "Install with: pip install DBUtils"
+            )
+            _connection_pool = None
+        return _connection_pool
+
 
 class FuncThread(threading.Thread):
     """Thread for executing function with timeout"""
@@ -88,30 +120,32 @@ class AkshareProvider:
         }
 
     def connect_db(self):
-        """建立数据库连接"""
+        """建立数据库连接（优先使用连接池）"""
         if not self.db_url.startswith("mysql"):
             self.logger.warning("Only MySQL is supported for data storage")
             return False
 
         try:
             if not self.connection or not self.connection.open:
-                self.connection = pymysql.connect(**self.db_config)
+                pool = _get_connection_pool(self.db_config)
+                if pool is not None:
+                    self.connection = pool.connection()
+                else:
+                    self.connection = pymysql.connect(**self.db_config)
                 self.cursor = self.connection.cursor()
-                self.logger.info("数据库连接成功")
             return True
         except pymysql.Error as err:
             self.logger.error(f"数据库连接失败: {err}")
             raise
 
     def disconnect_db(self):
-        """关闭数据库连接"""
+        """归还连接到连接池（或关闭直接连接）"""
         if self.cursor:
             self.cursor.close()
             self.cursor = None
-        if self.connection and self.connection.open:
-            self.connection.close()
+        if self.connection:
+            self.connection.close()  # Returns to pool if pooled
             self.connection = None
-            self.logger.info("数据库连接已关闭")
 
     def __enter__(self):
         self.connect_db()
@@ -215,6 +249,19 @@ class AkshareProvider:
             self.logger.error(f"批量执行失败: {err}")
             raise
 
+    @staticmethod
+    def _validate_identifier(name: str) -> str:
+        """Validate and sanitize a SQL identifier (table/column name).
+
+        Only allows alphanumeric characters and underscores to prevent
+        SQL injection via identifier names.
+        """
+        import re
+        cleaned = str(name).strip()
+        if not re.match(r'^[A-Za-z0-9_]+$', cleaned):
+            raise ValueError(f"Invalid SQL identifier: {cleaned!r}")
+        return cleaned
+
     def save_data(
         self,
         df: pd.DataFrame,
@@ -273,12 +320,12 @@ class AkshareProvider:
 
         self.connect_db()
 
-        safe_table = str(table_name).replace("`", "``")
+        safe_table = self._validate_identifier(table_name)
 
         # 检查表是否存在，不存在则创建
         if create_table:
             try:
-                self.cursor.execute(f"SHOW TABLES LIKE '{safe_table}'")
+                self.cursor.execute("SHOW TABLES LIKE %s", (safe_table,))
                 if not self.cursor.fetchone():
                     self._auto_create_table(safe_table, df)
             except pymysql.Error as err:
@@ -364,7 +411,7 @@ class AkshareProvider:
         """检查表是否存在"""
         try:
             self.connect_db()
-            self.cursor.execute(f"SHOW TABLES LIKE '{table_name}'")
+            self.cursor.execute("SHOW TABLES LIKE %s", (table_name,))
             result = self.cursor.fetchone()
             return result is not None
         except pymysql.Error as err:
@@ -379,8 +426,9 @@ class AkshareProvider:
             return 0
 
         try:
+            safe_name = self._validate_identifier(table_name)
             self.connect_db()
-            self.cursor.execute(f"SELECT COUNT(*) FROM `{table_name}`")
+            self.cursor.execute(f"SELECT COUNT(*) FROM `{safe_name}`")
             return self.cursor.fetchone()[0] or 0
         except pymysql.Error:
             return 0
@@ -413,7 +461,8 @@ class AkshareProvider:
             return None
 
         try:
-            result = await db_session.execute(text(f"SELECT COUNT(*) FROM `{table_name}`"))
+            safe_name = self._validate_identifier(table_name)
+            result = await db_session.execute(text(f"SELECT COUNT(*) FROM `{safe_name}`"))
             return result.scalar() or 0
         except Exception:
             return None

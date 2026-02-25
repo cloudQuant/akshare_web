@@ -137,10 +137,20 @@ class ResetPasswordRequest(BaseModel):
 
     new_password: str = Field(
         ...,
-        min_length=6,
+        min_length=8,
         max_length=100,
-        description="New password for the user",
+        description="Password must be at least 8 characters with letters and digits",
     )
+
+    @field_validator('new_password')
+    @classmethod
+    def validate_password_complexity(cls, v: str) -> str:
+        """Validate password has at least one letter and one digit."""
+        if not any(c.isalpha() for c in v):
+            raise ValueError('Password must contain at least one letter')
+        if not any(c.isdigit() for c in v):
+            raise ValueError('Password must contain at least one digit')
+        return v
 
 
 # Interface schemas

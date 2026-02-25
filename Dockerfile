@@ -30,6 +30,14 @@ COPY . .
 RUN useradd -m -u 1000 appuser && \
     chown -R appuser:appuser /app
 
+# Frontend build stage
+FROM node:20-alpine AS frontend-builder
+WORKDIR /frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci --ignore-scripts
+COPY frontend/ .
+RUN npm run build
+
 # Final stage
 FROM python:3.11-slim
 
@@ -38,6 +46,9 @@ RUN apt-get update && apt-get install -y \
     libmariadb3 \
     curl \
     && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user in final stage
+RUN useradd -m -u 1000 appuser
 
 # Copy Python dependencies from builder
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
@@ -48,6 +59,9 @@ COPY --from=builder /app/akshare /app/akshare
 
 # Copy application code
 COPY --from=builder --chown=appuser:appuser /app /app
+
+# Copy frontend build output
+COPY --from=frontend-builder --chown=appuser:appuser /frontend/dist /app/frontend/dist
 
 # Set working directory
 WORKDIR /app

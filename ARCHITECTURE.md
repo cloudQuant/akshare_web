@@ -407,3 +407,16 @@ CORS_ORIGINS=http://localhost:5173
 2. 在 `frontend/src/router/index.ts` 中添加路由
 3. 在 `frontend/src/api/` 中添加 API 调用函数
 4. 在 LayoutView 侧边栏中添加菜单项
+
+### APScheduler 升级路径 (v3 → v4)
+
+当前使用 APScheduler 3.x，其 `AsyncIOScheduler` 是半异步的（内部仍有同步锁）。
+APScheduler 4.x 提供原生 async/await 支持和更好的持久化（支持 SQLAlchemy async job store）。
+
+**升级步骤**（未来考虑）：
+1. 升级依赖：`apscheduler>=4.0`
+2. 替换 `AsyncIOScheduler` → `AsyncScheduler`
+3. 替换 `CronTrigger.from_crontab()` → `CronTrigger()`（API 略有变化）
+4. 移除 `AsyncIOExecutor`（v4 不再需要独立 executor）
+5. 可选：配置 SQLAlchemy async job store 实现任务持久化
+6. 涉及文件：`app/services/scheduler_service.py`、`app/services/scheduler.py`

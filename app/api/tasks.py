@@ -148,12 +148,8 @@ class PaginatedTaskResponse(BaseModel):
     page_size: int
 
 
-class APIResponse(BaseModel):
-    """Generic API response."""
-
-    success: bool
-    message: str
-    data: dict | None = None
+# Note: APIResponse is imported from app.api.schemas (line 22).
+# Do NOT redefine it here to avoid shadowing the canonical version.
 
 
 async def _can_access_task(user_id: int, task: ScheduledTask, is_admin: bool) -> bool:

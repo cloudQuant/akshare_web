@@ -29,7 +29,17 @@ TESTING = os.getenv("TESTING", "false").lower() == "true"
 # Configure loguru logging (file rotation + level from settings)
 import sys
 logger.remove()  # Remove default stderr handler
-logger.add(sys.stderr, level=settings.log_level, format="<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>")
+
+_LOG_FORMAT_PRETTY = (
+    "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | "
+    "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>"
+)
+
+if settings.log_json and not TESTING:
+    logger.add(sys.stderr, level=settings.log_level, serialize=True)
+else:
+    logger.add(sys.stderr, level=settings.log_level, format=_LOG_FORMAT_PRETTY)
+
 if not TESTING:
     Path(settings.log_file).parent.mkdir(parents=True, exist_ok=True)
     logger.add(
@@ -39,7 +49,22 @@ if not TESTING:
         compression="gz",
         level=settings.log_level,
         encoding="utf-8",
+        serialize=settings.log_json,
     )
+
+# Initialize Sentry error tracking (if configured)
+if settings.sentry_dsn and not TESTING:
+    try:
+        import sentry_sdk
+        sentry_sdk.init(
+            dsn=settings.sentry_dsn,
+            traces_sample_rate=settings.sentry_traces_sample_rate,
+            environment=settings.app_env,
+            release=settings.app_version,
+        )
+        logger.info("Sentry error tracking initialized")
+    except ImportError:
+        logger.warning("SENTRY_DSN configured but sentry-sdk not installed. pip install sentry-sdk")
 
 # Initialize rate limiter (only in production)
 from app.api.rate_limit import get_limiter

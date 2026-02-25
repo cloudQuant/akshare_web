@@ -8,7 +8,7 @@ import enum
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Enum, ForeignKey, Integer, JSON, Numeric, String, Text
+from sqlalchemy import BigInteger, Boolean, DateTime, Enum, ForeignKey, Index, Integer, JSON, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -68,6 +68,14 @@ class ScheduledTask(Base):
     """
 
     __tablename__ = "scheduled_tasks"
+    __table_args__ = (
+        Index("ix_scheduled_tasks_user_active", "user_id", "is_active"),
+        {
+            "extend_existing": True,
+            "mysql_charset": "utf8mb4",
+            "mysql_collate": "utf8mb4_unicode_ci",
+        },
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -170,6 +178,16 @@ class TaskExecution(Base):
     """
 
     __tablename__ = "task_executions"
+    __table_args__ = (
+        Index("ix_task_executions_task_status", "task_id", "status"),
+        Index("ix_task_executions_start_time", "start_time"),
+        Index("ix_task_executions_script_id", "script_id"),
+        {
+            "extend_existing": True,
+            "mysql_charset": "utf8mb4",
+            "mysql_collate": "utf8mb4_unicode_ci",
+        },
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     execution_id: Mapped[str] = mapped_column(

@@ -113,6 +113,22 @@ class Settings(BaseSettings):
         default="INFO", description="Logging level"
     )
     log_file: str = Field(default="logs/app.log", description="Log file path")
+    log_json: bool = Field(
+        default=False,
+        description="Output logs in JSON format (recommended for production log aggregators)",
+    )
+
+    # Error Tracking (Sentry)
+    sentry_dsn: str | None = Field(
+        default=None,
+        description="Sentry DSN for error tracking. Leave empty to disable.",
+    )
+    sentry_traces_sample_rate: float = Field(
+        default=0.1,
+        ge=0.0,
+        le=1.0,
+        description="Sentry performance traces sample rate (0.0 to 1.0)",
+    )
 
     # Data Storage
     data_dir: Path = Field(default=Path("./data"), description="Data storage directory")

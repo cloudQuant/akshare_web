@@ -12,6 +12,7 @@ from typing import Any
 
 from loguru import logger
 
+from app.core.config import settings
 from app.core.database import async_session_maker
 from app.models.task import ScheduledTask, ScheduleType, TaskStatus, TriggeredBy
 from app.services.scheduler_service import get_scheduler_service, init_scheduler_service
@@ -48,6 +49,15 @@ class TaskScheduler:
 
         # Add jobs for all active tasks
         await self._load_active_tasks()
+
+        # Register housekeeping: cleanup old execution records daily at 3am
+        await self.scheduler_service.add_job(
+            job_id="__housekeeping_cleanup_executions",
+            func=self._cleanup_old_executions,
+            trigger_type="cron",
+            trigger_args={"cron_expression": "0 3 * * *"},
+            job_name="Cleanup old execution records",
+        )
 
         self._running = True
         logger.info("Task scheduler started successfully")
@@ -249,11 +259,9 @@ class TaskScheduler:
 
                 await db.commit()
 
-                # Handle execution completion with retry service
-                await execution_service.handle_execution_complete(
-                    execution_id=execution.execution_id,
-                    status=TaskStatus.FAILED,
-                )
+                # Note: retry is handled by this loop's exponential backoff.
+                # Do NOT call handle_execution_complete here to avoid
+                # triggering a second retry via RetryService.
 
                 # If not last attempt, wait before retry
                 if attempt < max_attempts - 1:
@@ -360,6 +368,38 @@ class TaskScheduler:
     def get_running_task_ids(self) -> list[int]:
         """Get list of currently running task IDs."""
         return [tid for tid, t in self._running_tasks.items() if not t.done()]
+
+    async def _cleanup_old_executions(self, retention_days: int = 30) -> None:
+        """Delete execution records older than retention_days.
+
+        Keeps the most recent records and removes old completed/failed ones.
+        """
+        from datetime import timedelta
+        from sqlalchemy import delete, and_
+        from app.models.task import TaskExecution
+
+        cutoff = datetime.now(UTC) - timedelta(days=retention_days)
+        try:
+            async with async_session_maker() as db:
+                result = await db.execute(
+                    delete(TaskExecution).where(
+                        and_(
+                            TaskExecution.created_at < cutoff,
+                            TaskExecution.status.in_([
+                                TaskStatus.COMPLETED,
+                                TaskStatus.FAILED,
+                                TaskStatus.CANCELLED,
+                                TaskStatus.TIMEOUT,
+                            ]),
+                        )
+                    )
+                )
+                await db.commit()
+                deleted = result.rowcount
+                if deleted:
+                    logger.info(f"Housekeeping: deleted {deleted} execution records older than {retention_days} days")
+        except Exception as e:
+            logger.error(f"Housekeeping cleanup failed: {e}")
 
 
 # Global scheduler instance

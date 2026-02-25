@@ -41,6 +41,10 @@ dependencies = [
     "scipy>=1.13.0",
     "decorator>=5.1.1",
     "mini-racer>=0.6.0",
+]
+
+[project.optional-dependencies]
+web = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",
     "pydantic>=2.9.2",
@@ -63,7 +67,18 @@ dependencies = [
     "aiomysql>=0.2.0",
     "aiosqlite>=0.20.0",
     "click>=8.1.7",
+    "DBUtils>=3.1.0",
+    "bcrypt>=4.0.0",
 ]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
+]
+
+# Install akshare only:  pip install .
+# Install with web platform:  pip install ".[web]"
+# Install with dev tools:  pip install ".[web,dev]"
 
 [project.urls]
 Homepage = "https://github.com/akfamily/akshare"
