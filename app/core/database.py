@@ -91,7 +91,6 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     async with async_session_maker() as session:
         try:
             yield session
-            await session.commit()
         except Exception:
             await session.rollback()
             raise
@@ -147,11 +146,18 @@ async def init_db() -> None:
             logger.info("Database already initialized")
             return
 
-        # Create default admin user
+        # Create default admin user (password from env or generated)
+        import os
+        import secrets
+        default_pw = os.getenv("ADMIN_DEFAULT_PASSWORD") or secrets.token_urlsafe(16)
+        if not os.getenv("ADMIN_DEFAULT_PASSWORD"):
+            logger.warning(
+                f"No ADMIN_DEFAULT_PASSWORD set. Generated random password: {default_pw}"
+            )
         admin_user = User(
             username="admin",
             email="admin@akshare.com",
-            hashed_password=hash_password("admin123"),
+            hashed_password=hash_password(default_pw),
             full_name="System Administrator",
             role=UserRole.ADMIN,
             is_active=True,

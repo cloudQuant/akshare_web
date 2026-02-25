@@ -138,7 +138,7 @@ class TestGetResultDirect:
         user = await _user(test_db)
         e = await _task_and_exec(test_db, "er1", TaskStatus.COMPLETED, end_time=datetime.utcnow())
         result = await get_download_result(execution_id=e.id, current_user=user, db=test_db)
-        assert result["success"] is True
+        assert result.success is True
 
     @pytest.mark.asyncio
     async def test_running(self, test_db):

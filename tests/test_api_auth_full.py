@@ -169,11 +169,22 @@ class TestLogout:
     """Test logout endpoint."""
 
     @pytest.mark.asyncio
-    async def test_logout(self, test_client: AsyncClient):
-        """Test logout endpoint."""
-        response = await test_client.post("/api/auth/logout")
+    async def test_logout(self, test_client: AsyncClient, test_user_token: str):
+        """Test logout endpoint revokes token."""
+        headers = {"Authorization": f"Bearer {test_user_token}"}
+        response = await test_client.post("/api/auth/logout", headers=headers)
         assert response.status_code == 200
         assert response.json()["success"] is True
+
+        # Token should now be revoked - subsequent request should fail
+        me_response = await test_client.get("/api/auth/me", headers=headers)
+        assert me_response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_logout_no_token(self, test_client: AsyncClient):
+        """Test logout without token returns 401/403."""
+        response = await test_client.post("/api/auth/logout")
+        assert response.status_code in (401, 403)
 
 
 class TestGetCurrentUser:

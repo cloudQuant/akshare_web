@@ -26,6 +26,21 @@ from app.services.scheduler import task_scheduler
 # Check if we're in testing mode
 TESTING = os.getenv("TESTING", "false").lower() == "true"
 
+# Configure loguru logging (file rotation + level from settings)
+import sys
+logger.remove()  # Remove default stderr handler
+logger.add(sys.stderr, level=settings.log_level, format="<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>")
+if not TESTING:
+    Path(settings.log_file).parent.mkdir(parents=True, exist_ok=True)
+    logger.add(
+        settings.log_file,
+        rotation="10 MB",
+        retention="30 days",
+        compression="gz",
+        level=settings.log_level,
+        encoding="utf-8",
+    )
+
 # Initialize rate limiter (only in production)
 from app.api.rate_limit import get_limiter
 limiter = get_limiter()

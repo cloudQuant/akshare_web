@@ -293,16 +293,20 @@ class DataAcquisitionService:
             VALUES ({placeholders})
         """
 
-        # Insert in batches
-        batch_size = 1000
+        # Insert in batches using executemany for better performance
+        batch_size = 2000
         rows_inserted = 0
 
         for i in range(0, len(records), batch_size):
             batch = records[i : i + batch_size]
             await db.execute(text(insert_sql), batch)
             rows_inserted += len(batch)
+            # Flush periodically to avoid large transaction memory
+            if rows_inserted % 10000 == 0:
+                await db.flush()
 
         await db.commit()
+        logger.info(f"Inserted {rows_inserted} rows into {table_name}")
         return rows_inserted
 
     async def _update_table_metadata(

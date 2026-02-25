@@ -35,16 +35,25 @@ async def list_categories(
 
     Returns all available data interface categories with descriptions.
     """
+    from app.utils.cache import api_cache
+
+    cached = api_cache.get("interface_categories")
+    if cached is not None:
+        return APIResponse(success=True, message="success", data=cached)
+
     result = await db.execute(
         select(InterfaceCategory)
         .order_by(InterfaceCategory.sort_order, InterfaceCategory.name)
     )
     categories = result.scalars().all()
 
+    data = [CategoryResponse.model_validate(c).model_dump() for c in categories]
+    api_cache.set("interface_categories", data, ttl=300)  # 5 min cache
+
     return APIResponse(
         success=True,
         message="success",
-        data=[CategoryResponse.model_validate(c).model_dump() for c in categories]
+        data=data,
     )
 
 

@@ -7,6 +7,7 @@ Provides endpoints for user registration, login, token refresh, and logout.
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -210,13 +211,24 @@ async def refresh_token(
 
 
 @router.post("/logout", response_model=APIResponse)
-async def logout():
+async def logout(
+    current_user: CurrentUser,
+    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
+):
     """
     Logout current user.
 
-    In a production environment, this would invalidate the token
-    in a Redis store or similar. For now, it's a client-side operation.
+    Revokes the current access token so it cannot be reused.
     """
+    from app.core.token_blacklist import token_blacklist
+    from app.core.security import decode_token
+
+    token = credentials.credentials
+    payload = decode_token(token)
+    # Use token expiry for blacklist auto-cleanup
+    expires_at = payload.get("exp") if payload else None
+    token_blacklist.revoke(token, expires_at=expires_at)
+
     return APIResponse(
         success=True,
         message="Logout successful",

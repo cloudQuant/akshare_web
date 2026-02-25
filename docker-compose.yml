@@ -51,11 +51,20 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: mysql+aiomysql://${MYSQL_USER:-akshare_user}:${MYSQL_PASSWORD:-akshare_pass}@mysql:3306/${MYSQL_DATABASE:-akshare_web}
-      WAREHOUSE_DB_URL: mysql+aiomysql://${WAREHOUSE_USER:-warehouse_user}:${WAREHOUSE_PASSWORD:-warehouse_pass}@mysql_warehouse:3306/${WAREHOUSE_DATABASE:-akshare_warehouse}
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_USER: ${MYSQL_USER:-akshare_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-akshare_pass}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-akshare_web}
+      DATA_MYSQL_HOST: mysql_warehouse
+      DATA_MYSQL_PORT: 3306
+      DATA_MYSQL_USER: ${WAREHOUSE_USER:-warehouse_user}
+      DATA_MYSQL_PASSWORD: ${WAREHOUSE_PASSWORD:-warehouse_pass}
+      DATA_MYSQL_DATABASE: ${WAREHOUSE_DATABASE:-akshare_warehouse}
       SECRET_KEY: ${SECRET_KEY:-change-this-secret-key-in-production}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
-      ENVIRONMENT: ${ENVIRONMENT:-production}
+      APP_ENV: ${APP_ENV:-production}
+      ADMIN_DEFAULT_PASSWORD: ${ADMIN_DEFAULT_PASSWORD:-}
     depends_on:
       mysql:
         condition: service_healthy

@@ -158,9 +158,8 @@ class APIResponse(BaseModel):
 
 async def _can_access_task(user_id: int, task: ScheduledTask, is_admin: bool) -> bool:
     """Check if user can access task."""
-    if is_admin:
-        return True
-    return task.user_id == user_id
+    from app.core.security import PermissionChecker
+    return PermissionChecker.can_access_owned_resource(user_id, task.user_id, is_admin)
 
 
 @router.get("/schedule/templates")

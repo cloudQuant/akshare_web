@@ -4,6 +4,8 @@ import logging
 import time
 from functools import wraps
 
+from loguru import logger as _default_logger
+
 
 def retry_on_exception(
     max_retries: int = 3,
@@ -29,7 +31,7 @@ def retry_on_exception(
                 local_logger = args[0].logger
 
             if not local_logger:
-                local_logger = logging.getLogger(func.__name__)
+                local_logger = _default_logger
 
             last_exception = None
             for attempt in range(max_retries):
@@ -75,7 +77,7 @@ def async_retry_on_exception(
                 local_logger = args[0].logger
 
             if not local_logger:
-                local_logger = logging.getLogger(func.__name__)
+                local_logger = _default_logger
 
             last_exception = None
             for attempt in range(max_retries):

@@ -182,6 +182,15 @@ class PermissionChecker:
         return user_role == UserRole.ADMIN
 
     @staticmethod
+    def can_access_owned_resource(
+        user_id: int,
+        resource_owner_id: int,
+        is_admin: bool,
+    ) -> bool:
+        """Quick check: admin or owner."""
+        return is_admin or user_id == resource_owner_id
+
+    @staticmethod
     def can_access_resource(
         user_role: UserRole | str,
         user_id: int,

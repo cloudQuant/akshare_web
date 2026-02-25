@@ -46,6 +46,16 @@ async def get_current_user(
         )
 
     token = credentials.credentials
+
+    # Check if token has been revoked (logout)
+    from app.core.token_blacklist import token_blacklist
+    if token_blacklist.is_revoked(token):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has been revoked",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     payload = verify_token(token, token_type="access")
 
     if payload is None:

@@ -87,6 +87,18 @@ async def test_client(test_db):
     app.dependency_overrides.clear()
 
 
+@pytest.fixture(autouse=True)
+def _clear_test_state():
+    """Clear shared state before each test."""
+    from app.core.token_blacklist import token_blacklist
+    from app.utils.cache import api_cache
+    token_blacklist._blacklist.clear()
+    api_cache.clear()
+    yield
+    token_blacklist._blacklist.clear()
+    api_cache.clear()
+
+
 @pytest.fixture
 def test_user_data():
     """Provide test user data."""

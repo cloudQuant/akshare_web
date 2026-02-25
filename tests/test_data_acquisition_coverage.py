@@ -215,8 +215,8 @@ class TestInsertData:
         df = pd.DataFrame({"a": list(range(2500))})
         result = await svc._insert_data("ak_test", df, mock_db)
         assert result == 2500
-        # Should have 3 batch calls (1000 + 1000 + 500)
-        assert mock_db.execute.call_count == 3
+        # Should have 2 batch calls (2000 + 500)
+        assert mock_db.execute.call_count == 2
 
 
 class TestUpdateTableMetadata:

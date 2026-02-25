@@ -175,10 +175,10 @@ class TaskExecution(Base):
     execution_id: Mapped[str] = mapped_column(
         String(100), unique=True, index=True, nullable=False
     )
-    task_id: Mapped[int] = mapped_column(
+    task_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("scheduled_tasks.id"),
-        nullable=False,
+        nullable=True,
     )
     script_id: Mapped[str] = mapped_column(String(100), nullable=False)
     params: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)

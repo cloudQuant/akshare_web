@@ -276,15 +276,16 @@ class ScriptService:
 
         for category, config in SCRIPT_CATEGORIES.items():
             category_path = os.path.join(script_base_path, category)
-            if not os.path.exists(category_path):
+            if not await asyncio.to_thread(os.path.exists, category_path):
                 continue
 
             for sub_category in config.get("sub_categories", []):
                 sub_path = os.path.join(category_path, sub_category)
-                if not os.path.exists(sub_path):
+                if not await asyncio.to_thread(os.path.exists, sub_path):
                     continue
 
-                for filename in os.listdir(sub_path):
+                filenames = await asyncio.to_thread(os.listdir, sub_path)
+                for filename in filenames:
                     if not filename.endswith(".py") or filename.startswith("__"):
                         continue
 

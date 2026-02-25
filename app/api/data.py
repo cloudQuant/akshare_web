@@ -64,7 +64,7 @@ async def trigger_download(
     import uuid
     execution = TaskExecution(
         execution_id=f"dl_{uuid.uuid4().hex[:12]}",
-        task_id=0,  # Manual download has no parent task
+        task_id=None,  # Manual download has no parent task
         script_id=iface.name,
         status=TaskStatus.PENDING,
         retry_count=0,
@@ -187,10 +187,13 @@ async def get_download_result(
         )
 
     # Return success info
-    return {
-        "success": True,
-        "execution_id": execution_id,
-        "rows_affected": execution.rows_after,
-        "duration_ms": execution.duration,
-        "completed_at": execution.end_time,
-    }
+    return APIResponse(
+        success=True,
+        message="Download completed",
+        data={
+            "execution_id": execution_id,
+            "rows_affected": execution.rows_after,
+            "duration_ms": execution.duration,
+            "completed_at": execution.end_time.isoformat() if execution.end_time else None,
+        },
+    )
