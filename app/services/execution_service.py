@@ -299,7 +299,11 @@ class ExecutionService:
         status: TaskStatus,
     ) -> bool:
         """
-        Handle execution completion and trigger retry if needed.
+        Handle execution completion callback.
+
+        Note: Retry logic is handled exclusively by TaskScheduler._execute_with_retry().
+        This method is kept for status logging / future hooks (e.g. notifications),
+        but does NOT trigger retries to avoid double-retry issues.
 
         Args:
             execution_id: Execution ID
@@ -308,45 +312,6 @@ class ExecutionService:
         Returns:
             True if handled successfully
         """
-        if status != TaskStatus.FAILED:
-            return True
-
-        # Get execution with task info
-        query = select(TaskExecution).options(
-            selectinload(TaskExecution.task)
-        ).where(TaskExecution.execution_id == execution_id)
-
-        result = await self.db.execute(query)
-        execution = result.scalar_one_or_none()
-
-        if not execution:
-            logger.warning(f"Execution not found for retry handling: {execution_id}")
-            return False
-
-        task = execution.task
-        if not task:
-            logger.warning(f"Task not found for execution: {execution_id}")
-            return False
-
-        # Check if retry is needed
-        if not task.retry_on_failure:
-            logger.debug(f"Task {task.id} does not have retry enabled")
-            return True
-
-        if execution.retry_count >= task.max_retries:
-            logger.info(
-                f"Execution {execution_id} has reached max retries "
-                f"({execution.retry_count}/{task.max_retries})"
-            )
-            return True
-
-        # Trigger retry
-        from app.services.retry_service import RetryService
-
-        retry_service = RetryService(self.db)
-        scheduled = await retry_service.schedule_retry(execution, task)
-
-        if scheduled:
-            logger.info(f"Retry scheduled for execution {execution_id}")
-
+        if status == TaskStatus.FAILED:
+            logger.info(f"Execution {execution_id} failed (retry handled by scheduler)")
         return True

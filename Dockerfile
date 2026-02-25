@@ -20,11 +20,14 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
 # Install akshare package
+COPY pyproject.toml setup.cfg* ./
 COPY akshare/ ./akshare/
-RUN pip install -e ./akshare
+RUN pip install --no-cache-dir -e .
 
-# Copy application code
-COPY . .
+# Copy application code (akshare already cached above)
+COPY app/ ./app/
+COPY alembic/ ./alembic/
+COPY alembic.ini logging_config.ini ./
 
 # Create non-root user
 RUN useradd -m -u 1000 appuser && \

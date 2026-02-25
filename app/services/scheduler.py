@@ -278,9 +278,19 @@ class TaskScheduler:
                     error_message=str(e),
                 )
 
-                # Note: retry is handled by this loop's exponential backoff.
-                # Do NOT call handle_execution_complete here to avoid
-                # triggering a second retry via RetryService.
+                # Send failure notification (WebSocket + optional email)
+                try:
+                    from app.services.notification_service import NotificationService
+                    await NotificationService.notify_task_failed(
+                        task_id=task.id,
+                        task_name=task.name,
+                        execution_id=execution.execution_id,
+                        error_message=str(e),
+                        retry_count=attempt + 1,
+                        max_retries=max_attempts,
+                    )
+                except Exception:
+                    pass  # Notification is best-effort
 
                 # If not last attempt, wait before retry
                 if attempt < max_attempts - 1:
@@ -430,14 +440,40 @@ class TaskScheduler:
         """Delete execution records older than retention_days.
 
         Keeps the most recent records and removes old completed/failed ones.
+        Also marks stuck PENDING/RUNNING executions (older than 4 hours) as TIMEOUT.
         """
         from datetime import timedelta
-        from sqlalchemy import delete, and_
+        from sqlalchemy import delete, and_, update
         from app.models.task import TaskExecution
 
         cutoff = datetime.now(UTC) - timedelta(days=retention_days)
+        stuck_cutoff = datetime.now(UTC) - timedelta(hours=4)
+
         try:
             async with async_session_maker() as db:
+                # 1. Mark stuck PENDING/RUNNING executions as TIMEOUT
+                stuck_result = await db.execute(
+                    update(TaskExecution)
+                    .where(
+                        and_(
+                            TaskExecution.created_at < stuck_cutoff,
+                            TaskExecution.status.in_([
+                                TaskStatus.PENDING,
+                                TaskStatus.RUNNING,
+                            ]),
+                        )
+                    )
+                    .values(
+                        status=TaskStatus.TIMEOUT,
+                        end_time=datetime.now(UTC),
+                        error_message="Marked as timeout by housekeeping (stuck > 4 hours)",
+                    )
+                )
+                stuck_count = stuck_result.rowcount
+                if stuck_count:
+                    logger.warning(f"Housekeeping: marked {stuck_count} stuck executions as TIMEOUT")
+
+                # 2. Delete old terminal-state execution records
                 result = await db.execute(
                     delete(TaskExecution).where(
                         and_(

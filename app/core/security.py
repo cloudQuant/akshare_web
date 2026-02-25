@@ -8,7 +8,8 @@ import bcrypt
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from jose import JWTError, jwt
+import jwt
+from jwt.exceptions import PyJWTError
 from loguru import logger
 
 from app.core.config import settings
@@ -86,6 +87,7 @@ def create_access_token(
         settings.secret_key,
         algorithm=settings.algorithm,
     )
+    # PyJWT returns str directly (no need for .decode())
     return encoded_jwt
 
 
@@ -140,7 +142,7 @@ def decode_token(token: str) -> dict[str, Any] | None:
             algorithms=[settings.algorithm],
         )
         return payload
-    except JWTError as e:
+    except PyJWTError as e:
         logger.warning(f"Token decode failed: {e}")
         return None
 

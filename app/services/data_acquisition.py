@@ -5,6 +5,7 @@ Handles execution of akshare data interface calls and database storage.
 """
 
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from typing import Any
 
@@ -26,6 +27,9 @@ class DataAcquisitionService:
 
     Handles data retrieval, validation, and storage with progress tracking.
     """
+
+    # Dedicated thread pool for blocking akshare calls (avoids starving default pool)
+    _akshare_executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="akshare")
 
     def __init__(self):
         self._active_executions: dict[int, dict] = {}
@@ -96,13 +100,14 @@ class DataAcquisitionService:
                 await db.commit()
                 return 0
 
-            # Store data in database
+            # Store data in database (single transaction for consistency)
             rows_affected = await self._store_data(
                 data=data,
                 interface=interface,
                 execution_id=execution_id,
                 db=db,
             )
+            await db.commit()
 
             return rows_affected
 
@@ -147,10 +152,10 @@ class DataAcquisitionService:
                 if param_value is not None:
                     kwargs[param_name] = param_value
 
-            # Call function (run in thread pool for blocking calls)
+            # Call function (run in dedicated thread pool for blocking calls)
             loop = asyncio.get_running_loop()
             result = await loop.run_in_executor(
-                None,
+                self._akshare_executor,
                 lambda: func(**kwargs) if kwargs else func()
             )
 
@@ -246,9 +251,9 @@ class DataAcquisitionService:
             elif pd.api.types.is_datetime64_any_dtype(dtype):
                 sql_type = "DATETIME"
             else:
-                # String type with length
+                # String type with 2x safety margin, min 255, max 2000
                 max_len = data[col].astype(str).str.len().max()
-                max_len = min(max(max_len or 1, 50), 500)
+                max_len = min(max(int((max_len or 1) * 2), 255), 2000)
                 sql_type = f"VARCHAR({max_len})"
 
             columns_defs.append(f"`{col}` {sql_type}")
@@ -267,7 +272,6 @@ class DataAcquisitionService:
         """
 
         await db.execute(text(create_sql))
-        await db.commit()
 
     async def _insert_data(
         self,
@@ -275,21 +279,22 @@ class DataAcquisitionService:
         data: pd.DataFrame,
         db: AsyncSession,
     ) -> int:
-        """Insert data into table."""
+        """Insert data into table using INSERT IGNORE to avoid duplicates."""
         if data.empty:
             return 0
 
-        # Prepare data for insertion
+        # Prepare data for insertion (convert NaN/NaT to None for MySQL)
+        data = data.where(pd.notna(data), None)
         records = data.to_dict("records")
 
-        # Build INSERT statement
+        # Build INSERT IGNORE statement to skip duplicate rows gracefully
         columns = list(data.columns)
         columns_str = ", ".join([f"`{col}`" for col in columns])
         placeholders = ", ".join([f":{col}" for col in columns])
 
         quoted_name = safe_table_name(table_name)
         insert_sql = f"""
-            INSERT INTO {quoted_name} ({columns_str})
+            INSERT IGNORE INTO {quoted_name} ({columns_str})
             VALUES ({placeholders})
         """
 
@@ -299,14 +304,14 @@ class DataAcquisitionService:
 
         for i in range(0, len(records), batch_size):
             batch = records[i : i + batch_size]
-            await db.execute(text(insert_sql), batch)
-            rows_inserted += len(batch)
+            result = await db.execute(text(insert_sql), batch)
+            rows_inserted += result.rowcount
             # Flush periodically to avoid large transaction memory
             if rows_inserted % 10000 == 0:
                 await db.flush()
 
-        await db.commit()
-        logger.info(f"Inserted {rows_inserted} rows into {table_name}")
+        # Note: final commit is handled by the caller for transaction consistency
+        logger.info(f"Inserted {rows_inserted} rows into {table_name} (ignored duplicates)")
         return rows_inserted
 
     async def _update_table_metadata(
@@ -349,7 +354,7 @@ class DataAcquisitionService:
             )
             db.add(table_meta)
 
-        await db.commit()
+        # Note: commit handled by caller for transaction consistency
 
     def get_progress(self, execution_id: int) -> dict[str, Any]:
         """

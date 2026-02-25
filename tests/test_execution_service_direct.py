@@ -222,6 +222,12 @@ class TestDeleteExecutions:
 
 
 class TestHandleExecutionComplete:
+    """Tests for handle_execution_complete.
+
+    Note: Retry logic was moved exclusively to TaskScheduler._execute_with_retry (C1).
+    handle_execution_complete now only logs and returns True.
+    """
+
     @pytest.mark.asyncio
     async def test_non_failed(self, test_db):
         svc = ExecutionService(test_db)
@@ -229,59 +235,15 @@ class TestHandleExecutionComplete:
         assert result is True
 
     @pytest.mark.asyncio
-    async def test_exec_not_found(self):
+    async def test_failed_returns_true(self):
         mock_db = AsyncMock()
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = None
-        mock_db.execute.return_value = mock_result
         svc = ExecutionService(mock_db)
         result = await svc.handle_execution_complete("nonexistent", TaskStatus.FAILED)
-        assert result is False
-
-    @pytest.mark.asyncio
-    async def test_failed_no_retry(self):
-        mock_db = AsyncMock()
-        mock_exec = MagicMock()
-        mock_exec.execution_id = "e1"
-        mock_exec.retry_count = 0
-        mock_task = MagicMock()
-        mock_task.id = 1
-        mock_task.retry_on_failure = False
-        mock_exec.task = mock_task
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = mock_exec
-        mock_db.execute.return_value = mock_result
-        svc = ExecutionService(mock_db)
-        result = await svc.handle_execution_complete("e1", TaskStatus.FAILED)
         assert result is True
 
     @pytest.mark.asyncio
-    async def test_failed_max_retries_reached(self):
+    async def test_cancelled_returns_true(self):
         mock_db = AsyncMock()
-        mock_exec = MagicMock()
-        mock_exec.execution_id = "e2"
-        mock_exec.retry_count = 3
-        mock_task = MagicMock()
-        mock_task.id = 1
-        mock_task.retry_on_failure = True
-        mock_task.max_retries = 3
-        mock_exec.task = mock_task
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = mock_exec
-        mock_db.execute.return_value = mock_result
         svc = ExecutionService(mock_db)
-        result = await svc.handle_execution_complete("e2", TaskStatus.FAILED)
+        result = await svc.handle_execution_complete("some_id", TaskStatus.CANCELLED)
         assert result is True
-
-    @pytest.mark.asyncio
-    async def test_failed_no_task(self):
-        mock_db = AsyncMock()
-        mock_exec = MagicMock()
-        mock_exec.execution_id = "e3"
-        mock_exec.task = None
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = mock_exec
-        mock_db.execute.return_value = mock_result
-        svc = ExecutionService(mock_db)
-        result = await svc.handle_execution_complete("e3", TaskStatus.FAILED)
-        assert result is False

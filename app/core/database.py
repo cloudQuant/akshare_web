@@ -152,7 +152,9 @@ async def init_db() -> None:
         default_pw = os.getenv("ADMIN_DEFAULT_PASSWORD") or secrets.token_urlsafe(16)
         if not os.getenv("ADMIN_DEFAULT_PASSWORD"):
             logger.warning(
-                f"No ADMIN_DEFAULT_PASSWORD set. Generated random password: {default_pw}"
+                "No ADMIN_DEFAULT_PASSWORD set. Generated random password: "
+                f"{default_pw[:3]}{'*' * (len(default_pw) - 3)} "
+                "(set ADMIN_DEFAULT_PASSWORD env var to control this)"
             )
         admin_user = User(
             username="admin",
