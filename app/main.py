@@ -87,9 +87,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger.warning("⚠️  USING DEFAULT SECRET KEY! Change this in production!")
 
     # Initialize database
-    from app.core.database import create_tables
+    if settings.is_production:
+        # In production, rely on alembic migrations (run `alembic upgrade head` before deploy)
+        logger.info("Production mode: skipping create_tables (use alembic migrations)")
+    else:
+        from app.core.database import create_tables
+        await create_tables()
 
-    await create_tables()
     await init_db()
 
     # Start task scheduler
@@ -102,9 +106,28 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Shutdown
     logger.info("Shutting down application...")
     await task_scheduler.shutdown()
+
+    # Shutdown the akshare thread pool executor
+    from app.services.data_acquisition import DataAcquisitionService
+    DataAcquisitionService._akshare_executor.shutdown(wait=False)
+
     await close_db()
     logger.info("Application shutdown complete")
 
+
+# OpenAPI tag metadata
+openapi_tags = [
+    {"name": "Authentication", "description": "用户注册、登录、令牌管理"},
+    {"name": "Data Interfaces", "description": "akshare 数据接口浏览与管理"},
+    {"name": "Scheduled Tasks", "description": "定时数据采集任务的增删改查与触发"},
+    {"name": "Data Acquisition", "description": "手动触发数据下载与进度追踪"},
+    {"name": "Data Tables", "description": "数据表浏览、查询、导出与删除"},
+    {"name": "User Management", "description": "用户列表、编辑、角色管理（管理员）"},
+    {"name": "Data Scripts", "description": "数据脚本注册、扫描与状态管理"},
+    {"name": "Task Executions", "description": "任务执行记录查询与统计"},
+    {"name": "Settings", "description": "数据库连接等系统设置（管理员）"},
+    {"name": "WebSocket", "description": "实时任务执行状态推送"},
+]
 
 # Create FastAPI application
 app = FastAPI(
@@ -113,6 +136,7 @@ app = FastAPI(
     version=settings.app_version,
     docs_url="/docs" if settings.app_debug else None,
     redoc_url="/redoc" if settings.app_debug else None,
+    openapi_tags=openapi_tags,
     lifespan=lifespan,
 )
 
@@ -172,9 +196,21 @@ async def generic_exception_handler(request: Request, exc: Exception):
     )
 
 
-# Include API routes (v1 is the canonical prefix, /api kept for backward compatibility)
+# Include API routes (v1 is the canonical prefix)
 app.include_router(api_router, prefix="/api/v1")
 app.include_router(api_router, prefix="/api")
+
+
+@app.middleware("http")
+async def deprecation_header_middleware(request: Request, call_next):
+    """Add deprecation header for requests using /api/ without version prefix."""
+    response = await call_next(request)
+    path = request.url.path
+    if path.startswith("/api/") and not path.startswith("/api/v"):
+        response.headers["Deprecation"] = "true"
+        response.headers["Sunset"] = "2026-06-01"
+        response.headers["Link"] = '</api/v1>; rel="successor-version"'
+    return response
 
 
 @app.get("/health")

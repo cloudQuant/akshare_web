@@ -7,6 +7,7 @@ Provides endpoints for managing database connection configurations.
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from loguru import logger
 from pydantic import BaseModel, Field, validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
@@ -239,6 +240,14 @@ async def update_database_config(
             "MYSQL_USER": request.user,
             "MYSQL_PASSWORD": request.password,
         }
+
+    # Audit log
+    db_type = "warehouse" if request.is_warehouse else "main"
+    logger.warning(
+        f"[AUDIT] Admin '{current_admin.username}' (id={current_admin.id}) "
+        f"updated {db_type} database config: host={request.host}, port={request.port}, "
+        f"database={request.database}, user={request.user}"
+    )
 
     # Persist to .env file
     from pathlib import Path

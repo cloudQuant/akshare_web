@@ -21,6 +21,7 @@ class TestLifespan:
             mock_settings.app_version = "1.0"
             mock_settings.app_env = "test"
             mock_settings.secret_key = "change-this-secret-key"
+            mock_settings.is_production = False
             mock_sched.start = AsyncMock()
             mock_sched.shutdown = AsyncMock()
 
@@ -46,6 +47,7 @@ class TestLifespan:
             mock_settings.app_version = "1.0"
             mock_settings.app_env = "test"
             mock_settings.secret_key = "a-real-secret-key-here"
+            mock_settings.is_production = False
             mock_sched.start = AsyncMock()
             mock_sched.shutdown = AsyncMock()
 

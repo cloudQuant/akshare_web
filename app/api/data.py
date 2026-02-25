@@ -29,6 +29,16 @@ router = APIRouter()
 data_service = DataAcquisitionService()
 
 
+def _log_task_exception(task: "asyncio.Task") -> None:
+    """Log unhandled exceptions from background asyncio tasks."""
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is not None:
+        from loguru import logger
+        logger.error(f"Unhandled exception in background task: {type(exc).__name__}: {exc}")
+
+
 @router.post("/download", status_code=status.HTTP_202_ACCEPTED)
 async def trigger_download(
     request: DataDownloadRequest,
@@ -99,7 +109,8 @@ async def trigger_download(
                 from loguru import logger
                 logger.error(f"Background download failed for execution {exec_id}: {e}")
 
-    asyncio.create_task(_bg_download())
+    bg = asyncio.create_task(_bg_download())
+    bg.add_done_callback(_log_task_exception)
 
     return DataDownloadResponse(
         execution_id=execution.id,

@@ -103,12 +103,35 @@ async def broadcast_execution_update(
 # WebSocket endpoint
 # ---------------------------------------------------------------------------
 
+async def _authenticate_ws(ws: WebSocket) -> bool:
+    """Validate token query param for WebSocket connections.
+
+    Accepts ``/ws/executions?token=<jwt>``.  Returns True if valid,
+    False otherwise (caller should close the socket).
+    """
+    token = ws.query_params.get("token")
+    if not token:
+        return False
+
+    from app.core.security import verify_token
+    from app.core.token_blacklist import token_blacklist
+
+    if token_blacklist.is_revoked(token):
+        return False
+
+    payload = verify_token(token, token_type="access")
+    return payload is not None
+
+
 @router.websocket("/ws/executions")
 async def execution_updates(ws: WebSocket):
     """
     WebSocket endpoint for real-time execution updates.
 
-    Clients simply connect and receive JSON messages:
+    Connect with a valid JWT token as query parameter:
+    ``ws://host/ws/executions?token=<access_token>``
+
+    Clients receive JSON messages:
     ```json
     {
       "type": "execution_update",
@@ -121,6 +144,11 @@ async def execution_updates(ws: WebSocket):
     }
     ```
     """
+    # Authenticate before accepting
+    if not await _authenticate_ws(ws):
+        await ws.close(code=4001, reason="Authentication required")
+        return
+
     await ws_manager.connect(ws)
     try:
         # Keep connection alive; handle any client messages (ping/pong)

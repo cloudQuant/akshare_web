@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select, func, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_current_user, get_db
+from app.api.dependencies import get_current_user, get_current_admin_user, get_db
 from app.core.database import get_data_db
 from app.api.schemas import (
     APIResponse,
@@ -236,7 +236,7 @@ async def delete_table(
     table_id: int,
     db: AsyncSession = Depends(get_db),
     data_db: AsyncSession = Depends(get_data_db),
-    current_user = Depends(get_current_user),
+    current_user = Depends(get_current_admin_user),
 ):
     """
     Delete data table.
@@ -287,8 +287,10 @@ async def export_table_data(
     """
     Export table data as CSV or Excel file.
 
-    Streams the result so memory usage stays bounded for large tables.
+    CSV uses streaming to keep memory bounded for large tables.
+    Excel is limited to 50,000 rows due to in-memory requirement.
     """
+    import csv
     import io
     from fastapi.responses import StreamingResponse
 
@@ -303,26 +305,26 @@ async def export_table_data(
             detail="Data table not found",
         )
 
-    # Query data from data warehouse
-    try:
-        query = text(
-            f"SELECT * FROM {_safe_table_name(table.table_name)} LIMIT :limit"
-        )
-        data_result = await data_db.execute(query, {"limit": limit})
-        columns = list(data_result.keys()) if data_result.returns_rows else []
-        rows = data_result.fetchall()
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to query table data: {str(e)}",
-        )
-
-    import pandas as pd
-    df = pd.DataFrame(rows, columns=columns)
-
     safe_name = re.sub(r'[^\w]', '_', table.table_name)
+    xlsx_limit = min(limit, 50000)
 
     if format == "xlsx":
+        # Excel requires full load; cap at 50k rows
+        try:
+            query = text(
+                f"SELECT * FROM {_safe_table_name(table.table_name)} LIMIT :limit"
+            )
+            data_result = await data_db.execute(query, {"limit": xlsx_limit})
+            columns = list(data_result.keys()) if data_result.returns_rows else []
+            rows = data_result.fetchall()
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to query table data: {str(e)}",
+            )
+
+        import pandas as pd
+        df = pd.DataFrame(rows, columns=columns)
         buf = io.BytesIO()
         df.to_excel(buf, index=False, engine="openpyxl")
         buf.seek(0)
@@ -332,11 +334,59 @@ async def export_table_data(
             headers={"Content-Disposition": f'attachment; filename="{safe_name}.xlsx"'},
         )
     else:
-        buf = io.StringIO()
-        df.to_csv(buf, index=False)
-        buf.seek(0)
+        # CSV: stream in batches to keep memory low
+        batch_size = 5000
+
+        async def _csv_stream():
+            import decimal
+            from datetime import date, datetime as _dt
+
+            def _serialise(v):
+                if isinstance(v, decimal.Decimal):
+                    return str(v)
+                if isinstance(v, (date, _dt)):
+                    return v.isoformat()
+                if isinstance(v, bytes):
+                    return v.decode("utf-8", errors="replace")
+                return v
+
+            offset = 0
+            header_written = False
+            while offset < limit:
+                batch_limit = min(batch_size, limit - offset)
+                query = text(
+                    f"SELECT * FROM {_safe_table_name(table.table_name)} "
+                    f"LIMIT :limit OFFSET :offset"
+                )
+                data_result = await data_db.execute(
+                    query, {"limit": batch_limit, "offset": offset}
+                )
+                columns = list(data_result.keys()) if data_result.returns_rows else []
+                rows = data_result.fetchall()
+
+                if not rows:
+                    if not header_written and columns:
+                        buf = io.StringIO()
+                        writer = csv.writer(buf)
+                        writer.writerow(columns)
+                        yield buf.getvalue()
+                    break
+
+                buf = io.StringIO()
+                writer = csv.writer(buf)
+                if not header_written:
+                    writer.writerow(columns)
+                    header_written = True
+                for row in rows:
+                    writer.writerow([_serialise(v) for v in row])
+                yield buf.getvalue()
+
+                offset += len(rows)
+                if len(rows) < batch_limit:
+                    break
+
         return StreamingResponse(
-            iter([buf.getvalue()]),
+            _csv_stream(),
             media_type="text/csv",
             headers={"Content-Disposition": f'attachment; filename="{safe_name}.csv"'},
         )
@@ -346,7 +396,7 @@ async def export_table_data(
 async def refresh_table_metadata(
     db: AsyncSession = Depends(get_db),
     data_db: AsyncSession = Depends(get_data_db),
-    current_user = Depends(get_current_user),
+    current_user = Depends(get_current_admin_user),
 ):
     """
     Refresh table metadata.

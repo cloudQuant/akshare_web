@@ -367,7 +367,15 @@ class TaskScheduler:
 
         bg = asyncio.create_task(_bg_execute())
         self._running_tasks[task_id_val] = bg
-        bg.add_done_callback(lambda t, tid=task_id_val: self._running_tasks.pop(tid, None))
+
+        def _on_done(t: asyncio.Task, tid: int = task_id_val) -> None:
+            self._running_tasks.pop(tid, None)
+            if not t.cancelled():
+                exc = t.exception()
+                if exc is not None:
+                    logger.error(f"Unhandled exception in trigger_task bg for task {tid}: {exc}")
+
+        bg.add_done_callback(_on_done)
 
         return execution_id
 

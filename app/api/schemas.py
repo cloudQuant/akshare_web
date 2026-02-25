@@ -11,6 +11,18 @@ from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
 from app.models.user import UserRole
 
 
+def validate_password_complexity(password: str) -> str:
+    """Validate password has at least one letter and one digit.
+
+    Reusable across all schemas that accept a password field.
+    """
+    if not any(c.isalpha() for c in password):
+        raise ValueError('Password must contain at least one letter')
+    if not any(c.isdigit() for c in password):
+        raise ValueError('Password must contain at least one digit')
+    return password
+
+
 # Base response schema
 class APIResponse(BaseModel):
     """Standard API response wrapper."""
@@ -69,13 +81,8 @@ class RegisterRequest(BaseModel):
 
     @field_validator('password')
     @classmethod
-    def validate_password_complexity(cls, v: str) -> str:
-        """Validate password has at least one letter and one digit."""
-        if not any(c.isalpha() for c in v):
-            raise ValueError('Password must contain at least one letter')
-        if not any(c.isdigit() for c in v):
-            raise ValueError('Password must contain at least one digit')
-        return v
+    def check_password(cls, v: str) -> str:
+        return validate_password_complexity(v)
 
 
 class TokenResponse(BaseModel):
@@ -144,13 +151,8 @@ class ResetPasswordRequest(BaseModel):
 
     @field_validator('new_password')
     @classmethod
-    def validate_password_complexity(cls, v: str) -> str:
-        """Validate password has at least one letter and one digit."""
-        if not any(c.isalpha() for c in v):
-            raise ValueError('Password must contain at least one letter')
-        if not any(c.isdigit() for c in v):
-            raise ValueError('Password must contain at least one digit')
-        return v
+    def check_password(cls, v: str) -> str:
+        return validate_password_complexity(v)
 
 
 # Interface schemas
