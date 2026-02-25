@@ -52,5 +52,14 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                     f"{response.status_code} ({duration_ms:.1f}ms)"
                 )
 
+            # Record metrics for Prometheus endpoint
+            try:
+                from app.api.metrics import metrics
+                metrics.record_request(
+                    request.method, path, response.status_code, duration_ms / 1000
+                )
+            except Exception:
+                pass  # metrics are best-effort
+
         response.headers["X-Request-ID"] = request_id
         return response

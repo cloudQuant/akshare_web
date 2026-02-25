@@ -46,6 +46,23 @@ jobs:
           pip install -r requirements.txt
           pip install -e .
 
+      - name: Check Alembic migrations are up to date
+        env:
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_PORT: 3306
+          MYSQL_USER: test_user
+          MYSQL_PASSWORD: test_pass
+          MYSQL_DATABASE: akshare_web_test
+          DATA_MYSQL_HOST: 127.0.0.1
+          DATA_MYSQL_PORT: 3306
+          DATA_MYSQL_USER: test_user
+          DATA_MYSQL_PASSWORD: test_pass
+          DATA_MYSQL_DATABASE: akshare_web_test
+          SECRET_KEY: ci-test-secret-key-not-for-production
+        run: |
+          alembic upgrade head
+          alembic check 2>&1 || echo "⚠️  Alembic detected model changes without a migration. Run: alembic revision --autogenerate -m 'description'"
+
       - name: Run tests
         env:
           MYSQL_HOST: 127.0.0.1

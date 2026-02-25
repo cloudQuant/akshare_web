@@ -123,6 +123,10 @@ async def _authenticate_ws(ws: WebSocket) -> bool:
     return payload is not None
 
 
+_WS_IDLE_TIMEOUT = 90  # seconds: disconnect if no client message received
+_WS_PING_INTERVAL = 30  # seconds: server-side ping to keep connection alive
+
+
 @router.websocket("/ws/executions")
 async def execution_updates(ws: WebSocket):
     """
@@ -143,6 +147,9 @@ async def execution_updates(ws: WebSocket):
       }
     }
     ```
+
+    The server sends ``{"type": "ping"}`` every 30 s. If the client sends
+    nothing for 90 s the connection is closed to prevent zombie sockets.
     """
     # Authenticate before accepting
     if not await _authenticate_ws(ws):
@@ -150,16 +157,31 @@ async def execution_updates(ws: WebSocket):
         return
 
     await ws_manager.connect(ws)
+
+    async def _server_ping():
+        """Periodically send server-side ping to keep the connection alive."""
+        try:
+            while True:
+                await asyncio.sleep(_WS_PING_INTERVAL)
+                await ws.send_text(json.dumps({"type": "ping"}))
+        except Exception:
+            pass  # connection closed elsewhere
+
+    ping_task = asyncio.create_task(_server_ping())
     try:
-        # Keep connection alive; handle any client messages (ping/pong)
         while True:
-            data = await ws.receive_text()
+            # Apply idle timeout: if client sends nothing within the window, disconnect
+            data = await asyncio.wait_for(ws.receive_text(), timeout=_WS_IDLE_TIMEOUT)
             # Clients can send "ping" to keep alive
             if data.strip().lower() == "ping":
                 await ws.send_text(json.dumps({"type": "pong"}))
+    except asyncio.TimeoutError:
+        logger.debug("WebSocket idle timeout, closing connection")
+        await ws.close(code=4002, reason="Idle timeout")
     except WebSocketDisconnect:
         pass
     except Exception as e:
         logger.debug(f"WebSocket error: {e}")
     finally:
+        ping_task.cancel()
         await ws_manager.disconnect(ws)

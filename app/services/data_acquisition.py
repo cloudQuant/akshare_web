@@ -129,6 +129,7 @@ class DataAcquisitionService:
         self,
         interface: DataInterface,
         parameters: dict[str, Any],
+        timeout: int | None = None,
     ) -> pd.DataFrame | None:
         """
         Call akshare function with parameters.
@@ -159,10 +160,23 @@ class DataAcquisitionService:
             # and avoid closure capture issues
             loop = asyncio.get_running_loop()
             call = functools.partial(func, **kwargs) if kwargs else func
-            result = await loop.run_in_executor(
-                self._akshare_executor,
-                call,
-            )
+            coro = loop.run_in_executor(self._akshare_executor, call)
+
+            # Apply timeout if specified
+            effective_timeout = timeout if timeout and timeout > 0 else None
+            if effective_timeout is None:
+                from app.core.config import settings
+                effective_timeout = settings.akshare_call_timeout or None
+
+            if effective_timeout:
+                try:
+                    result = await asyncio.wait_for(coro, timeout=effective_timeout)
+                except asyncio.TimeoutError:
+                    raise TimeoutError(
+                        f"akshare function {interface.name} timed out after {effective_timeout}s"
+                    )
+            else:
+                result = await coro
 
             # Ensure result is DataFrame
             if not isinstance(result, pd.DataFrame):
@@ -311,17 +325,22 @@ class DataAcquisitionService:
             VALUES ({placeholders})
         """
 
-        # Insert in batches using executemany for better performance
-        batch_size = 2000
+        # Adaptive batch size: larger batches for big datasets
+        total_records = len(records)
+        batch_size = 5000 if total_records > 10000 else 2000
         rows_inserted = 0
 
-        for i in range(0, len(records), batch_size):
+        for i in range(0, total_records, batch_size):
             batch = records[i : i + batch_size]
             result = await db.execute(text(insert_sql), batch)
             rows_inserted += result.rowcount
             # Flush periodically to avoid large transaction memory
-            if rows_inserted % 10000 == 0:
+            if i > 0 and i % 20000 == 0:
                 await db.flush()
+                logger.debug(
+                    f"Insert progress: {i + len(batch)}/{total_records} "
+                    f"({rows_inserted} new rows so far)"
+                )
 
         # Note: final commit is handled by the caller for transaction consistency
         logger.info(f"Inserted {rows_inserted} rows into {table_name} (ignored duplicates)")

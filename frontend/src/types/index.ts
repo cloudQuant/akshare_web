@@ -97,19 +97,31 @@ export interface Task {
   updated_at: string
 }
 
-// Execution
+// Execution (matches backend TaskExecution model)
+export type TaskStatusType = 'pending' | 'running' | 'completed' | 'failed' | 'timeout' | 'cancelled'
+export type TriggeredByType = 'scheduler' | 'manual' | 'api'
+export type ScheduleTypeValue = 'once' | 'daily' | 'weekly' | 'monthly' | 'cron' | 'interval'
+
 export interface Execution {
   id: number
-  task_id?: number
-  script_id: number
-  status: 'pending' | 'running' | 'success' | 'failed'
-  start_time: string
-  end_time?: string
-  duration?: number
-  rows_processed?: number
-  error_message?: string
+  execution_id: string
+  task_id: number | null
+  script_id: string
+  params: Record<string, any> | null
+  status: TaskStatusType
+  start_time: string | null
+  end_time: string | null
+  duration: number | null
+  result: Record<string, any> | null
+  error_message: string | null
+  error_trace: string | null
+  rows_before: number | null
+  rows_after: number | null
   retry_count: number
+  triggered_by: TriggeredByType
+  operator_id: number | null
   created_at: string
+  updated_at: string
 }
 
 // Data Table

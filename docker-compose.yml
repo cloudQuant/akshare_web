@@ -39,6 +39,22 @@ services:
     profiles:
       - warehouse
 
+  # Redis (token blacklist, API cache, future job store)
+  redis:
+    image: redis:7-alpine
+    container_name: akshare_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # Backend API
   backend:
     build:
@@ -59,12 +75,15 @@ services:
       DATA_MYSQL_USER: ${WAREHOUSE_USER:-warehouse_user}
       DATA_MYSQL_PASSWORD: ${WAREHOUSE_PASSWORD:-warehouse_pass}
       DATA_MYSQL_DATABASE: ${WAREHOUSE_DATABASE:-akshare_warehouse}
+      REDIS_URL: redis://redis:6379/0
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set in .env or environment}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
       APP_ENV: ${APP_ENV:-production}
       ADMIN_DEFAULT_PASSWORD: ${ADMIN_DEFAULT_PASSWORD:-}
     depends_on:
       mysql:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     volumes:
       - ./logs:/app/logs
@@ -87,6 +106,8 @@ services:
       - ./frontend/dist:/usr/share/nginx/html
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
       - ./ssl:/etc/nginx/ssl:ro
+      - certbot_www:/var/www/certbot:ro
+      - certbot_conf:/etc/letsencrypt:ro
     depends_on:
       - backend
     healthcheck:
@@ -95,10 +116,27 @@ services:
       timeout: 10s
       retries: 3
 
+  # Let's Encrypt certificate auto-renewal (optional)
+  certbot:
+    image: certbot/certbot
+    container_name: akshare_certbot
+    volumes:
+      - certbot_www:/var/www/certbot
+      - certbot_conf:/etc/letsencrypt
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+    profiles:
+      - ssl
+
 volumes:
   mysql_data:
     driver: local
   warehouse_data:
+    driver: local
+  redis_data:
+    driver: local
+  certbot_www:
+    driver: local
+  certbot_conf:
     driver: local
 
 networks:

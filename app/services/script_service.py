@@ -216,10 +216,21 @@ class ScriptService:
             func = getattr(entrypoint, func_name, None) if not callable(entrypoint) else entrypoint
 
             if asyncio.iscoroutinefunction(func):
-                result = await func(**(params or {}))
+                coro = func(**(params or {}))
             else:
                 # 在线程中执行同步函数
-                result = await asyncio.to_thread(func, **(params or {}))
+                coro = asyncio.to_thread(func, **(params or {}))
+
+            # Apply timeout if specified
+            if timeout and timeout > 0:
+                try:
+                    result = await asyncio.wait_for(coro, timeout=timeout)
+                except asyncio.TimeoutError:
+                    raise TimeoutError(
+                        f"Script {script_id} execution timed out after {timeout}s"
+                    )
+            else:
+                result = await coro
 
             return {
                 "success": True,

@@ -258,7 +258,7 @@ async def health_check():
 
     Returns application health status.
     """
-    from app.core.database import check_db_connection
+    from app.core.database import check_db_connection, engine, data_engine
 
     db_healthy = await check_db_connection()
     scheduler_running = task_scheduler.is_running
@@ -271,6 +271,18 @@ async def health_check():
     else:
         overall_status = "unhealthy"
 
+    # Connection pool stats (helps detect pool exhaustion)
+    pool_status = {}
+    for label, eng in [("main", engine), ("data", data_engine)]:
+        pool = eng.pool
+        pool_status[label] = {
+            "size": pool.size(),
+            "checked_in": pool.checkedin(),
+            "checked_out": pool.checkedout(),
+            "overflow": pool.overflow(),
+            "invalid": pool.status(),
+        }
+
     return {
         "status": overall_status,
         "app_name": settings.app_name,
@@ -280,6 +292,7 @@ async def health_check():
             "database": "connected" if db_healthy else "disconnected",
             "scheduler": "running" if scheduler_running else "stopped",
         },
+        "pool": pool_status,
         "timestamp": datetime.now(UTC).isoformat(),
     }
 
