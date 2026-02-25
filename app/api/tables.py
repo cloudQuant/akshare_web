@@ -216,14 +216,18 @@ async def get_table_data(
             for row in rows
         ]
 
-        return {
-            "table_name": table.table_name,
-            "columns": columns,
-            "rows": serialized_rows,
-            "row_count": len(rows),
-            "offset": offset,
-            "limit": limit,
-        }
+        return APIResponse(
+            success=True,
+            message="success",
+            data={
+                "table_name": table.table_name,
+                "columns": columns,
+                "rows": serialized_rows,
+                "row_count": len(rows),
+                "offset": offset,
+                "limit": limit,
+            },
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -335,7 +339,7 @@ async def export_table_data(
         )
     else:
         # CSV: stream in batches to keep memory low
-        batch_size = 5000
+        batch_size = 10000
 
         async def _csv_stream():
             import decimal

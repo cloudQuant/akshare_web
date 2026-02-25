@@ -22,7 +22,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Install akshare package
 COPY pyproject.toml setup.cfg* ./
 COPY akshare/ ./akshare/
-RUN pip install --no-cache-dir -e .
+RUN pip install --no-cache-dir .
 
 # Copy application code (akshare already cached above)
 COPY app/ ./app/
@@ -79,5 +79,7 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-# Run the application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run the application with gunicorn (multi-worker production mode)
+# Override workers via WORKERS env var; defaults to 1 for safety
+# For single-process mode: CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "gunicorn app.main:app -w ${WORKERS:-1} -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 --timeout 120 --graceful-timeout 30 --access-logfile -"]

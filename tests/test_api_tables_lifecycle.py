@@ -127,7 +127,8 @@ class TestGetTableData:
         headers = {"Authorization": f"Bearer {test_user_token}"}
         response = await test_client.get(f"/api/tables/{table.id}/data", headers=headers)
         assert response.status_code == 200
-        data = response.json()
+        body = response.json()
+        data = body.get("data", body)  # Handle APIResponse wrapper
         assert data["table_name"] == "ak_real_data"
         assert len(data["rows"]) == 2
         assert data["rows"][0]["id"] == 1
@@ -145,7 +146,8 @@ class TestGetTableData:
         headers = {"Authorization": f"Bearer {test_user_token}"}
         response = await test_client.get(f"/api/tables/{table.id}/data?page=1&page_size=3", headers=headers)
         assert response.status_code == 200
-        data = response.json()
+        body = response.json()
+        data = body.get("data", body)  # Handle APIResponse wrapper
         assert len(data["rows"]) == 3
 
 

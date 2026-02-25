@@ -53,7 +53,13 @@ class SchedulerService:
                 self._job_executed_listener, EVENT_JOB_EXECUTED | EVENT_JOB_ERROR
             )
             scheduler.start()
-            logger.info("Scheduler started")
+            logger.info("Scheduler started (in-memory job store – jobs re-loaded from DB on each startup)")
+            logger.warning(
+                "APScheduler is using an in-memory job store. "
+                "If the process restarts, all jobs are re-registered from the database. "
+                "For persistent job queues across workers, consider migrating to "
+                "APScheduler 4.x with a SQLAlchemy/Redis data store, or arq/celery."
+            )
 
     async def shutdown(self, wait=True):
         """关闭调度器"""

@@ -2,6 +2,8 @@
 Request logging middleware.
 
 Logs request ID, method, path, status code, and response time for every request.
+Uses loguru contextualize() so all downstream log messages automatically include
+the request_id (trace_id) without manual threading.
 """
 
 import time
@@ -27,29 +29,28 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         path = request.url.path
         skip_log = path in ("/health",) or path.startswith("/assets/")
 
-        if not skip_log:
-            logger.info(
-                f"[{request_id}] {request.method} {path}"
-            )
+        # Bind request_id to all log messages within this request scope
+        with logger.contextualize(request_id=request_id):
+            if not skip_log:
+                logger.info(f"{request.method} {path}")
 
-        try:
-            response = await call_next(request)
-        except Exception:
+            try:
+                response = await call_next(request)
+            except Exception:
+                duration_ms = (time.perf_counter() - start_time) * 1000
+                logger.error(
+                    f"{request.method} {path} 500 ({duration_ms:.1f}ms)"
+                )
+                raise
+
             duration_ms = (time.perf_counter() - start_time) * 1000
-            logger.error(
-                f"[{request_id}] {request.method} {path} "
-                f"500 ({duration_ms:.1f}ms)"
-            )
-            raise
 
-        duration_ms = (time.perf_counter() - start_time) * 1000
-
-        if not skip_log:
-            log_fn = logger.info if response.status_code < 400 else logger.warning
-            log_fn(
-                f"[{request_id}] {request.method} {path} "
-                f"{response.status_code} ({duration_ms:.1f}ms)"
-            )
+            if not skip_log:
+                log_fn = logger.info if response.status_code < 400 else logger.warning
+                log_fn(
+                    f"{request.method} {path} "
+                    f"{response.status_code} ({duration_ms:.1f}ms)"
+                )
 
         response.headers["X-Request-ID"] = request_id
         return response

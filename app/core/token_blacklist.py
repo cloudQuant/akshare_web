@@ -179,6 +179,16 @@ def _create_blacklist() -> _TokenBlacklistBackend:
             logger.warning(f"Redis unavailable ({e}), falling back to in-memory token blacklist")
 
     logger.info("Token blacklist using in-memory backend (set REDIS_URL for multi-worker support)")
+
+    # Warn if running multiple workers without Redis
+    if settings.workers > 1 and settings.is_production:
+        logger.warning(
+            f"⚠️  Running {settings.workers} workers WITHOUT Redis! "
+            "In-memory token blacklist does NOT share state across workers. "
+            "Logout tokens will only be revoked in the worker that processed the logout. "
+            "Set REDIS_URL to fix this."
+        )
+
     return _InMemoryBlacklist()
 
 

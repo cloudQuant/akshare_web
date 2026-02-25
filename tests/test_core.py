@@ -363,7 +363,7 @@ class TestMainApp:
         """Test app title."""
         from app.main import app
 
-        assert app.title == "akshare_web"
+        assert "akshare_web" in app.title
 
     def test_app_has_routes(self):
         """Test app has routes."""

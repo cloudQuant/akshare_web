@@ -90,6 +90,33 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     if settings.is_production:
         # In production, rely on alembic migrations (run `alembic upgrade head` before deploy)
         logger.info("Production mode: skipping create_tables (use alembic migrations)")
+        # Check for pending migrations
+        try:
+            from alembic.config import Config as AlembicConfig
+            from alembic.script import ScriptDirectory
+            from alembic.runtime.migration import MigrationContext
+            from sqlalchemy import create_engine, inspect
+
+            sync_engine = create_engine(settings.database_url_sync)
+            with sync_engine.connect() as conn:
+                context = MigrationContext.configure(conn)
+                current_rev = context.get_current_revision()
+            sync_engine.dispose()
+
+            alembic_cfg = AlembicConfig("alembic.ini")
+            script_dir = ScriptDirectory.from_config(alembic_cfg)
+            head_rev = script_dir.get_current_head()
+
+            if current_rev != head_rev:
+                logger.warning(
+                    f"⚠️  Database migration is NOT up to date! "
+                    f"Current: {current_rev}, Head: {head_rev}. "
+                    f"Run 'alembic upgrade head' before starting."
+                )
+            else:
+                logger.info(f"Database migration is up to date (rev: {current_rev})")
+        except Exception as e:
+            logger.debug(f"Could not check alembic migration status: {e}")
     else:
         from app.core.database import create_tables
         await create_tables()
@@ -131,8 +158,12 @@ openapi_tags = [
 
 # Create FastAPI application
 app = FastAPI(
-    title=settings.app_name,
-    description="Web-based financial data management platform for akshare",
+    title=f"{settings.app_name} API v1",
+    description=(
+        "Web-based financial data management platform for akshare.\n\n"
+        "**Base URL**: `/api/v1`  \n"
+        "The legacy `/api` prefix is deprecated and will be removed after 2026-06-01."
+    ),
     version=settings.app_version,
     docs_url="/docs" if settings.app_debug else None,
     redoc_url="/redoc" if settings.app_debug else None,

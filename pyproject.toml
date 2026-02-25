@@ -69,6 +69,7 @@ web = [
     "click>=8.1.7",
     "DBUtils>=3.1.0",
     "bcrypt>=4.0.0",
+    "gunicorn>=22.0.0",
 ]
 dev = [
     "pytest>=8.3.0",

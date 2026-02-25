@@ -166,6 +166,34 @@ async def get_optional_user(
         return None
 
 
+# ---------------------------------------------------------------------------
+# Service-layer dependency injection
+# ---------------------------------------------------------------------------
+
+def get_execution_service(
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Get ExecutionService instance via dependency injection."""
+    from app.services.execution_service import ExecutionService
+    return ExecutionService(db)
+
+
+def get_script_service(
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Get ScriptService instance via dependency injection."""
+    from app.services.script_service import ScriptService
+    return ScriptService(db)
+
+
+def get_data_service(
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Get DataService instance via dependency injection."""
+    from app.services.data_service import DataService
+    return DataService(db)
+
+
 # Type aliases for commonly used dependencies
 CurrentUser = Annotated[User, Depends(get_current_user)]
 CurrentAdmin = Annotated[User, Depends(get_current_admin_user)]

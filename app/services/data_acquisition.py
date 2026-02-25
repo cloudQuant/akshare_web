@@ -5,6 +5,7 @@ Handles execution of akshare data interface calls and database storage.
 """
 
 import asyncio
+import functools
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from typing import Any
@@ -153,10 +154,13 @@ class DataAcquisitionService:
                     kwargs[param_name] = param_value
 
             # Call function (run in dedicated thread pool for blocking calls)
+            # Use functools.partial instead of lambda to snapshot kwargs
+            # and avoid closure capture issues
             loop = asyncio.get_running_loop()
+            call = functools.partial(func, **kwargs) if kwargs else func
             result = await loop.run_in_executor(
                 self._akshare_executor,
-                lambda: func(**kwargs) if kwargs else func()
+                call,
             )
 
             # Ensure result is DataFrame

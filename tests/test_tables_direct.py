@@ -135,8 +135,10 @@ class TestGetDataDirect:
         await test_db.commit()
         tbl = await _table(test_db, "real_data_tbl")
         result = await get_table_data(table_id=tbl.id, page=1, page_size=10, db=test_db, data_db=test_db, current_user=user)
-        assert result["row_count"] == 2
-        assert result["columns"] == ["id", "val"]
+        # get_table_data now returns APIResponse; extract .data dict
+        data = result.data if hasattr(result, "data") else result
+        assert data["row_count"] == 2
+        assert data["columns"] == ["id", "val"]
 
     @pytest.mark.asyncio
     async def test_data_nonexistent_table(self, test_db):

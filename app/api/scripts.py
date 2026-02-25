@@ -112,8 +112,15 @@ async def get_script_categories(
     current_user: User = Depends(get_current_user),
 ) -> APIResponse:
     """Get list of script categories."""
+    from app.utils.cache import api_cache
+
+    cached = api_cache.get("script_categories")
+    if cached is not None:
+        return APIResponse(success=True, message="success", data=cached)
+
     service = ScriptService(db)
     categories = await service.get_categories()
+    api_cache.set("script_categories", categories, ttl=300)  # 5 min cache
     return APIResponse(
         success=True,
         message="success",
