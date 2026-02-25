@@ -184,6 +184,6 @@ class TestResetPasswordDirect:
         admin = await _make_admin(test_db)
         with pytest.raises(HTTPException) as exc:
             from app.api.schemas import ResetPasswordRequest
-            body = ResetPasswordRequest(new_password="Xaaaaa")
+            body = ResetPasswordRequest(new_password="Xaaaaa123")
             await reset_user_password(user_id=99999, body=body, current_admin=admin, db=test_db)
         assert exc.value.status_code == 404

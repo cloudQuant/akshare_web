@@ -39,7 +39,8 @@ async def trigger_download(
     Trigger manual data download.
 
     Initiates data acquisition for the specified interface.
-    Returns execution ID for progress tracking.
+    Returns execution ID immediately for progress tracking.
+    The actual download runs as a background task.
     """
     # Get interface
     result = await db.execute(
@@ -60,7 +61,7 @@ async def trigger_download(
             detail="Data interface is not active",
         )
 
-    # Create temporary task execution record
+    # Create task execution record
     import uuid
     execution = TaskExecution(
         execution_id=f"dl_{uuid.uuid4().hex[:12]}",
@@ -74,13 +75,31 @@ async def trigger_download(
     await db.commit()
     await db.refresh(execution)
 
-    # Trigger async download
-    await data_service.execute_download(
-        execution_id=execution.id,
-        interface_id=iface.id,
-        parameters=request.parameters,
-        db=db,
-    )
+    # Capture IDs before launching background task (request db session
+    # will be closed after the response is sent)
+    exec_id = execution.id
+    iface_id = iface.id
+    params = request.parameters
+
+    # Launch download in the background with its own db session
+    import asyncio
+    from app.core.database import async_session_maker
+
+    async def _bg_download():
+        from app.core.database import async_session_maker as _sm
+        async with _sm() as bg_db:
+            try:
+                await data_service.execute_download(
+                    execution_id=exec_id,
+                    interface_id=iface_id,
+                    parameters=params,
+                    db=bg_db,
+                )
+            except Exception as e:
+                from loguru import logger
+                logger.error(f"Background download failed for execution {exec_id}: {e}")
+
+    asyncio.create_task(_bg_download())
 
     return DataDownloadResponse(
         execution_id=execution.id,

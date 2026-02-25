@@ -87,15 +87,32 @@ async def test_client(test_db):
     app.dependency_overrides.clear()
 
 
+def _clear_blacklist(bl):
+    """Clear token blacklist regardless of backend type."""
+    if hasattr(bl, '_blacklist'):
+        # In-memory backend
+        bl._blacklist.clear()
+    elif hasattr(bl, '_redis'):
+        # Redis backend – delete only our namespaced keys
+        import itertools
+        cursor, keys = bl._redis.scan(match=f"{bl._KEY_PREFIX}*", count=1000)
+        all_keys = list(keys)
+        while cursor:
+            cursor, keys = bl._redis.scan(cursor=cursor, match=f"{bl._KEY_PREFIX}*", count=1000)
+            all_keys.extend(keys)
+        if all_keys:
+            bl._redis.delete(*all_keys)
+
+
 @pytest.fixture(autouse=True)
 def _clear_test_state():
     """Clear shared state before each test."""
     from app.core.token_blacklist import token_blacklist
     from app.utils.cache import api_cache
-    token_blacklist._blacklist.clear()
+    _clear_blacklist(token_blacklist)
     api_cache.clear()
     yield
-    token_blacklist._blacklist.clear()
+    _clear_blacklist(token_blacklist)
     api_cache.clear()
 
 

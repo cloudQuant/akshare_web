@@ -19,7 +19,15 @@ from app.models.user import User
 from app.models.data_script import DataScript
 from app.services.scheduler import task_scheduler
 from app.services.execution_service import ExecutionService
-from app.api.schemas import APIResponse, ScheduleTemplate, ScheduleTemplatesResponse
+from app.api.schemas import (
+    APIResponse,
+    ScheduleTemplate,
+    ScheduleTemplatesResponse,
+    TaskCreateRequest,
+    TaskUpdateRequest,
+    TaskResponse,
+    PaginatedTaskResponse,
+)
 
 router = APIRouter()
 
@@ -88,68 +96,8 @@ def _task_to_dict(task: ScheduledTask, script_name: str | None = None) -> dict[s
     return task.to_dict(script_name=script_name)
 
 
-class TaskCreateRequest(BaseModel):
-    """Request model for creating a task."""
-
-    name: str
-    description: str | None = None
-    script_id: str
-    schedule_type: str
-    schedule_expression: str
-    parameters: dict | None = None
-    is_active: bool = True
-    retry_on_failure: bool = True
-    max_retries: int = 3
-    timeout: int = 0
-
-
-class TaskUpdateRequest(BaseModel):
-    """Request model for updating a task."""
-
-    name: str | None = None
-    description: str | None = None
-    schedule_type: str | None = None
-    schedule_expression: str | None = None
-    parameters: dict | None = None
-    is_active: bool | None = None
-    retry_on_failure: bool | None = None
-    max_retries: int | None = None
-    timeout: int | None = None
-
-
-class TaskResponse(BaseModel):
-    """Response model for task."""
-
-    id: int
-    name: str
-    description: str | None
-    user_id: int
-    script_id: str
-    script_name: str | None
-    schedule_type: str
-    schedule_expression: str
-    parameters: dict
-    is_active: bool
-    retry_on_failure: bool
-    max_retries: int
-    timeout: int
-    last_execution_at: datetime | None
-    next_execution_at: datetime | None
-    created_at: datetime
-    updated_at: datetime
-
-
-class PaginatedTaskResponse(BaseModel):
-    """Paginated response for tasks."""
-
-    items: list[TaskResponse]
-    total: int
-    page: int
-    page_size: int
-
-
-# Note: APIResponse is imported from app.api.schemas (line 22).
-# Do NOT redefine it here to avoid shadowing the canonical version.
+# Note: TaskCreateRequest, TaskUpdateRequest, TaskResponse, PaginatedTaskResponse
+# are imported from app.api.schemas (canonical location).
 
 
 async def _can_access_task(user_id: int, task: ScheduledTask, is_admin: bool) -> bool:

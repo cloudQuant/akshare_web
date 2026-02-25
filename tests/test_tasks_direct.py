@@ -98,13 +98,12 @@ class TestCreateTaskDirect:
 
     @pytest.mark.asyncio
     async def test_create_invalid_schedule_type(self, test_db):
-        from app.api.tasks import create_task, TaskCreateRequest
-        user = await _make_user(test_db)
+        from pydantic import ValidationError
+        from app.api.tasks import TaskCreateRequest
+        await _make_user(test_db)
         await _make_script(test_db, "inv_sched")
-        req = TaskCreateRequest(name="X", script_id="inv_sched", schedule_type="INVALID", schedule_expression="x")
-        with pytest.raises(HTTPException) as exc:
-            await create_task(request=req, current_user=user, db=test_db)
-        assert exc.value.status_code == 400
+        with pytest.raises(ValidationError):
+            TaskCreateRequest(name="X", script_id="inv_sched", schedule_type="INVALID", schedule_expression="x")
 
     @pytest.mark.asyncio
     async def test_create_inactive_task(self, test_db):
@@ -174,14 +173,10 @@ class TestUpdateTaskDirect:
 
     @pytest.mark.asyncio
     async def test_update_invalid_schedule_type(self, test_db):
-        from app.api.tasks import update_task, TaskUpdateRequest
-        user = await _make_user(test_db)
-        await _make_script(test_db)
-        task = await _make_task(test_db, user.id)
-        req = TaskUpdateRequest(schedule_type="INVALID")
-        with pytest.raises(HTTPException) as exc:
-            await update_task(task_id=task.id, request=req, current_user=user, db=test_db)
-        assert exc.value.status_code == 400
+        from pydantic import ValidationError
+        from app.api.tasks import TaskUpdateRequest
+        with pytest.raises(ValidationError):
+            TaskUpdateRequest(schedule_type="INVALID")
 
     @pytest.mark.asyncio
     async def test_update_all_fields(self, test_db):

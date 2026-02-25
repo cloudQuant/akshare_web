@@ -238,4 +238,4 @@ class TestTaskFullLifecycle:
         response = await test_client.put(f"/api/tasks/{task_id}", headers=headers, json={
             "schedule_type": "invalid_type",
         })
-        assert response.status_code == 400
+        assert response.status_code in (400, 422)

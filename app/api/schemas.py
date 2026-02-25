@@ -212,15 +212,16 @@ class InterfaceListResponse(BaseModel):
 class TaskCreateRequest(BaseModel):
     """Task creation request schema."""
 
-    interface_id: int
     name: str
     description: str | None = None
-    schedule_type: str = Field(..., pattern="^(once|daily|weekly|monthly|cron)$")
+    script_id: str
+    schedule_type: str = Field(..., pattern="^(once|daily|weekly|monthly|cron|interval)$")
     schedule_expression: str
-    parameters: dict[str, Any] = Field(default_factory=dict)
+    parameters: dict[str, Any] | None = None
     is_active: bool = True
     retry_on_failure: bool = True
     max_retries: int = Field(default=3, ge=0, le=10)
+    timeout: int = Field(default=0, ge=0)
 
 
 class TaskUpdateRequest(BaseModel):
@@ -228,12 +229,13 @@ class TaskUpdateRequest(BaseModel):
 
     name: str | None = Field(None, min_length=1, max_length=255)
     description: str | None = Field(None, max_length=500)
-    schedule_type: str | None = Field(None, pattern="^(once|daily|weekly|monthly|cron)$")
+    schedule_type: str | None = Field(None, pattern="^(once|daily|weekly|monthly|cron|interval)$")
     schedule_expression: str | None = None
     parameters: dict[str, Any] | None = None
     is_active: bool | None = None
     retry_on_failure: bool | None = None
     max_retries: int | None = Field(None, ge=0, le=10)
+    timeout: int | None = Field(None, ge=0)
 
 
 class TaskResponse(BaseModel):
@@ -243,20 +245,59 @@ class TaskResponse(BaseModel):
     name: str
     description: str | None
     user_id: int
-    interface_id: int
-    interface_name: str | None = None
+    script_id: str
+    script_name: str | None = None
     schedule_type: str
     schedule_expression: str
     parameters: dict[str, Any]
     is_active: bool
     retry_on_failure: bool
     max_retries: int
+    timeout: int
     last_execution_at: datetime | None
     next_execution_at: datetime | None
     created_at: datetime
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class PaginatedTaskResponse(BaseModel):
+    """Paginated response for tasks."""
+
+    items: list[TaskResponse]
+    total: int
+    page: int
+    page_size: int
+
+
+# Script management schemas
+class ScriptCreateRequest(BaseModel):
+    """Request model for creating a custom script."""
+
+    script_id: str = Field(..., min_length=1, max_length=100)
+    script_name: str = Field(..., min_length=1, max_length=200)
+    category: str = Field(..., min_length=1, max_length=50)
+    sub_category: str | None = Field(None, max_length=50)
+    description: str | None = None
+    source: str = "custom"
+    target_table: str | None = Field(None, max_length=100)
+    module_path: str | None = Field(None, max_length=255)
+    function_name: str | None = Field(None, max_length=100)
+    parameters: dict[str, Any] | None = None
+    estimated_duration: int = Field(60, ge=0)
+    timeout: int = Field(300, ge=0)
+
+
+class ScriptUpdateRequest(BaseModel):
+    """Request model for updating a script."""
+
+    script_name: str | None = Field(None, min_length=1, max_length=200)
+    description: str | None = None
+    sub_category: str | None = Field(None, max_length=50)
+    parameters: dict[str, Any] | None = None
+    estimated_duration: int | None = Field(None, ge=0)
+    timeout: int | None = Field(None, ge=0)
 
 
 class TaskExecutionResponse(BaseModel):

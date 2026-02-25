@@ -199,6 +199,11 @@ class TaskScheduler:
                     start_time=datetime.now(UTC),
                 )
 
+                # Broadcast RUNNING status via WebSocket
+                await self._broadcast_status(
+                    execution.execution_id, task.id, TaskStatus.RUNNING,
+                )
+
                 # Get table row count before execution
                 script = await script_service.get_script(task.script_id)
                 rows_before = None
@@ -226,22 +231,30 @@ class TaskScheduler:
 
                 # Update execution result
                 if result.get("success"):
+                    end_time = datetime.now(UTC)
                     await execution_service.update_execution(
                         execution_id=execution.execution_id,
                         status=TaskStatus.COMPLETED,
-                        end_time=datetime.now(UTC),
+                        end_time=end_time,
                         result=result,
                         rows_before=rows_before,
                         rows_after=rows_after,
                     )
 
                     # Update task last execution
-                    task.last_execution_at = datetime.now(UTC)
+                    task.last_execution_at = end_time
                     await db.commit()
 
+                    duration = (end_time - (execution.start_time or end_time)).total_seconds()
                     logger.info(
                         f"Task {task.name} (ID: {task.id}) completed successfully. "
                         f"Rows: {rows_before} -> {rows_after}"
+                    )
+
+                    # Broadcast COMPLETED status via WebSocket
+                    await self._broadcast_status(
+                        execution.execution_id, task.id, TaskStatus.COMPLETED,
+                        rows_before=rows_before, rows_after=rows_after, duration=duration,
                     )
                     return  # Success, exit retry loop
                 else:
@@ -258,6 +271,12 @@ class TaskScheduler:
                 )
 
                 await db.commit()
+
+                # Broadcast FAILED status via WebSocket
+                await self._broadcast_status(
+                    execution.execution_id, task.id, TaskStatus.FAILED,
+                    error_message=str(e),
+                )
 
                 # Note: retry is handled by this loop's exponential backoff.
                 # Do NOT call handle_execution_complete here to avoid
@@ -302,9 +321,14 @@ class TaskScheduler:
             logger.warning(f"Failed to remove task {task_id}: {e}")
 
     async def trigger_task(self, task_id: int, user_id: int | None = None) -> str:
-        """Trigger immediate task execution."""
+        """Trigger immediate task execution.
+
+        The background task creates its own database session so we don't
+        use a session that gets closed when this method returns.
+        """
         from sqlalchemy import select
 
+        # Read task info in a short-lived session
         async with async_session_maker() as db:
             result = await db.execute(select(ScheduledTask).where(ScheduledTask.id == task_id))
             task = result.scalar_one_or_none()
@@ -312,23 +336,30 @@ class TaskScheduler:
             if task is None:
                 raise ValueError(f"Task {task_id} not found")
 
-            execution_service = ExecutionService(db)
+            # Snapshot the values we need so we don't touch this session later
+            task_id_val = task.id
+            task_name = task.name
 
-            # Create execution record
-            execution = await execution_service.create_execution(
-                task_id=task.id,
-                script_id=task.script_id,
-                params=task.parameters,
-                triggered_by=TriggeredBy.MANUAL,
-                operator_id=user_id,
-            )
+        # Background coroutine with its own session
+        async def _bg_execute():
+            async with async_session_maker() as bg_db:
+                bg_result = await bg_db.execute(
+                    select(ScheduledTask).where(ScheduledTask.id == task_id_val)
+                )
+                bg_task = bg_result.scalar_one_or_none()
+                if bg_task is None:
+                    logger.error(f"Task {task_id_val} disappeared before execution")
+                    return
+                await self._execute_with_retry(bg_task, bg_db)
 
-            # Execute in background with cancellation support
-            bg_task = asyncio.create_task(self._execute_with_retry(task, db))
-            self._running_tasks[task.id] = bg_task
-            bg_task.add_done_callback(lambda t, tid=task.id: self._running_tasks.pop(tid, None))
+        # Generate an execution_id to return immediately
+        execution_id = f"exec_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}_{task_id_val}"
 
-            return execution.execution_id
+        bg = asyncio.create_task(_bg_execute())
+        self._running_tasks[task_id_val] = bg
+        bg.add_done_callback(lambda t, tid=task_id_val: self._running_tasks.pop(tid, None))
+
+        return execution_id
 
     async def cancel_task(self, task_id: int) -> bool:
         """Cancel a running task execution.
@@ -368,6 +399,32 @@ class TaskScheduler:
     def get_running_task_ids(self) -> list[int]:
         """Get list of currently running task IDs."""
         return [tid for tid, t in self._running_tasks.items() if not t.done()]
+
+    @staticmethod
+    async def _broadcast_status(
+        execution_id: str,
+        task_id: int | None,
+        status: TaskStatus,
+        *,
+        rows_before: int | None = None,
+        rows_after: int | None = None,
+        error_message: str | None = None,
+        duration: float | None = None,
+    ) -> None:
+        """Broadcast execution status change via WebSocket (best-effort)."""
+        try:
+            from app.api.websocket import broadcast_execution_update
+            await broadcast_execution_update(
+                execution_id=execution_id,
+                task_id=task_id,
+                status=status.value,
+                rows_before=rows_before,
+                rows_after=rows_after,
+                error_message=error_message,
+                duration=duration,
+            )
+        except Exception:
+            pass  # WebSocket broadcast is best-effort; never fail the task
 
     async def _cleanup_old_executions(self, retention_days: int = 30) -> None:
         """Delete execution records older than retention_days.

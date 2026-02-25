@@ -13,7 +13,7 @@ from sqlalchemy import select
 
 from app.core.database import get_db
 from app.api.dependencies import get_current_user, get_current_admin_user
-from app.api.schemas import APIResponse
+from app.api.schemas import APIResponse, ScriptCreateRequest, ScriptUpdateRequest
 from app.models.user import User
 from app.models.data_script import DataScript, ScriptFrequency
 from app.services.script_service import ScriptService
@@ -21,33 +21,8 @@ from app.services.script_service import ScriptService
 router = APIRouter()
 
 
-# Admin management schemas
-class ScriptCreateRequest(BaseModel):
-    """Request model for creating a custom script."""
-
-    script_id: str = Field(..., min_length=1, max_length=100)
-    script_name: str = Field(..., min_length=1, max_length=200)
-    category: str = Field(..., min_length=1, max_length=50)
-    sub_category: str | None = Field(None, max_length=50)
-    description: str | None = None
-    source: str = "custom"
-    target_table: str | None = Field(None, max_length=100)
-    module_path: str | None = Field(None, max_length=255)
-    function_name: str | None = Field(None, max_length=100)
-    parameters: dict[str, Any] | None = None
-    estimated_duration: int = Field(60, ge=0)
-    timeout: int = Field(300, ge=0)
-
-
-class ScriptUpdateRequest(BaseModel):
-    """Request model for updating a script."""
-
-    script_name: str | None = Field(None, min_length=1, max_length=200)
-    description: str | None = None
-    sub_category: str | None = Field(None, max_length=50)
-    parameters: dict[str, Any] | None = None
-    estimated_duration: int | None = Field(None, ge=0)
-    timeout: int | None = Field(None, ge=0)
+# Note: ScriptCreateRequest, ScriptUpdateRequest are imported from
+# app.api.schemas (canonical location).
 
 
 def _script_to_dict(script: DataScript) -> dict[str, Any]:

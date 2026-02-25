@@ -38,6 +38,7 @@ aiosqlite>=0.20.0
 click>=8.1.7
 DBUtils>=3.1.0
 bcrypt>=4.0.0
+redis>=5.0.0
 
 # Testing
 pytest==8.3.3

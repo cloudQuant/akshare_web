@@ -363,20 +363,17 @@ class TestTriggerTask:
         mock_task.script_id = "s1"
         mock_task.parameters = {}
 
-        mock_execution = MagicMock()
-        mock_execution.execution_id = "exec_123"
-
         mock_session = AsyncMock()
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = mock_task
         mock_session.execute.return_value = mock_result
 
         with patch("app.services.scheduler.async_session_maker") as mock_sm, \
-             patch("app.services.scheduler.ExecutionService") as MockES, \
              patch("asyncio.create_task"):
             mock_sm.return_value.__aenter__ = AsyncMock(return_value=mock_session)
             mock_sm.return_value.__aexit__ = AsyncMock(return_value=False)
-            MockES.return_value.create_execution = AsyncMock(return_value=mock_execution)
 
             result = await scheduler.trigger_task(1, user_id=42)
-            assert result == "exec_123"
+            # New format: exec_YYYYMMDD_HHMMSS_{task_id}
+            assert result.startswith("exec_")
+            assert result.endswith("_1")

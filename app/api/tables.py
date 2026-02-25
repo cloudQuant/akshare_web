@@ -275,6 +275,73 @@ async def delete_table(
     )
 
 
+@router.get("/{table_id}/export")
+async def export_table_data(
+    table_id: int,
+    format: str = Query("csv", pattern="^(csv|xlsx)$", description="Export format: csv or xlsx"),
+    limit: int = Query(100000, ge=1, le=1000000, description="Maximum rows to export"),
+    db: AsyncSession = Depends(get_db),
+    data_db: AsyncSession = Depends(get_data_db),
+    current_user = Depends(get_current_user),
+):
+    """
+    Export table data as CSV or Excel file.
+
+    Streams the result so memory usage stays bounded for large tables.
+    """
+    import io
+    from fastapi.responses import StreamingResponse
+
+    result = await db.execute(
+        select(DataTable).where(DataTable.id == table_id)
+    )
+    table = result.scalar_one_or_none()
+
+    if table is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Data table not found",
+        )
+
+    # Query data from data warehouse
+    try:
+        query = text(
+            f"SELECT * FROM {_safe_table_name(table.table_name)} LIMIT :limit"
+        )
+        data_result = await data_db.execute(query, {"limit": limit})
+        columns = list(data_result.keys()) if data_result.returns_rows else []
+        rows = data_result.fetchall()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to query table data: {str(e)}",
+        )
+
+    import pandas as pd
+    df = pd.DataFrame(rows, columns=columns)
+
+    safe_name = re.sub(r'[^\w]', '_', table.table_name)
+
+    if format == "xlsx":
+        buf = io.BytesIO()
+        df.to_excel(buf, index=False, engine="openpyxl")
+        buf.seek(0)
+        return StreamingResponse(
+            buf,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f'attachment; filename="{safe_name}.xlsx"'},
+        )
+    else:
+        buf = io.StringIO()
+        df.to_csv(buf, index=False)
+        buf.seek(0)
+        return StreamingResponse(
+            iter([buf.getvalue()]),
+            media_type="text/csv",
+            headers={"Content-Disposition": f'attachment; filename="{safe_name}.csv"'},
+        )
+
+
 @router.post("/refresh", )
 async def refresh_table_metadata(
     db: AsyncSession = Depends(get_db),

@@ -15,6 +15,7 @@ from app.api.users import router as users_router
 from app.api.scripts import router as scripts_router
 from app.api.executions import router as executions_router
 from app.api import settings as settings_api
+from app.api.websocket import router as ws_router
 
 api_router = APIRouter()
 
@@ -28,3 +29,4 @@ api_router.include_router(users_router, prefix="/users", tags=["User Management"
 api_router.include_router(scripts_router, prefix="/scripts", tags=["Data Scripts"])
 api_router.include_router(executions_router, prefix="/executions", tags=["Task Executions"])
 api_router.include_router(settings_api.router, prefix="/settings", tags=["Settings"])
+api_router.include_router(ws_router, tags=["WebSocket"])

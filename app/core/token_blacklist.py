@@ -1,40 +1,72 @@
 """
-In-memory token blacklist for logout support.
+Token blacklist for logout support.
 
-Stores revoked JWT tokens with automatic expiry cleanup.
-
-Limitation: In-memory storage does NOT work across multiple workers/processes.
-For production with multiple workers, set REDIS_URL in environment and this
-module will automatically use Redis instead.
+Supports two backends:
+- **Redis** (recommended for production): works across multiple workers/processes
+  and survives restarts.  Enabled automatically when REDIS_URL is set.
+- **In-memory** (fallback): thread-safe dict with TTL-based auto-cleanup.
+  Does NOT persist across restarts or share state between workers.
 """
 
+import abc
+import hashlib
 import threading
 import time
-from datetime import UTC, datetime
 
 from loguru import logger
 
 
-class TokenBlacklist:
+# ---------------------------------------------------------------------------
+# Abstract base
+# ---------------------------------------------------------------------------
+
+class _TokenBlacklistBackend(abc.ABC):
+    """Common interface for token blacklist backends."""
+
+    @abc.abstractmethod
+    def revoke(self, token: str, expires_at: float | None = None) -> None: ...
+
+    @abc.abstractmethod
+    def is_revoked(self, token: str) -> bool: ...
+
+    @abc.abstractmethod
+    def cleanup(self) -> int: ...
+
+    @abc.abstractmethod
+    def size(self) -> int: ...
+
+    @abc.abstractmethod
+    def stop(self) -> None: ...
+
+
+# ---------------------------------------------------------------------------
+# In-memory backend (original implementation)
+# ---------------------------------------------------------------------------
+
+class _InMemoryBlacklist(_TokenBlacklistBackend):
     """Thread-safe in-memory token blacklist with TTL-based auto-cleanup."""
 
-    # Run cleanup every 5 minutes
-    _CLEANUP_INTERVAL = 300
+    _CLEANUP_INTERVAL = 300  # 5 minutes
 
     def __init__(self):
-        self._blacklist: dict[str, float] = {}  # token -> expiry timestamp
+        self._blacklist: dict[str, float] = {}  # token_hash -> expiry ts
         self._lock = threading.Lock()
         self._cleanup_timer: threading.Timer | None = None
         self._start_cleanup_loop()
 
+    # -- helpers --
+
+    @staticmethod
+    def _hash(token: str) -> str:
+        """Store a SHA-256 hash instead of the raw token for safety."""
+        return hashlib.sha256(token.encode()).hexdigest()
+
     def _start_cleanup_loop(self) -> None:
-        """Start the periodic cleanup background timer."""
         self._cleanup_timer = threading.Timer(self._CLEANUP_INTERVAL, self._periodic_cleanup)
         self._cleanup_timer.daemon = True
         self._cleanup_timer.start()
 
     def _periodic_cleanup(self) -> None:
-        """Periodic cleanup callback."""
         try:
             removed = self.cleanup()
             if removed:
@@ -44,33 +76,26 @@ class TokenBlacklist:
         finally:
             self._start_cleanup_loop()
 
-    def revoke(self, token: str, expires_at: float | None = None) -> None:
-        """Add a token to the blacklist.
+    # -- public API --
 
-        Args:
-            token: The JWT token string to revoke.
-            expires_at: Unix timestamp when token expires (for auto-cleanup).
-                       If None, token is blacklisted for 24 hours.
-        """
+    def revoke(self, token: str, expires_at: float | None = None) -> None:
         if expires_at is None:
-            expires_at = time.time() + 86400  # 24 hours default
+            expires_at = time.time() + 86400
         with self._lock:
-            self._blacklist[token] = expires_at
+            self._blacklist[self._hash(token)] = expires_at
 
     def is_revoked(self, token: str) -> bool:
-        """Check if a token has been revoked."""
+        h = self._hash(token)
         with self._lock:
-            exp = self._blacklist.get(token)
+            exp = self._blacklist.get(h)
             if exp is None:
                 return False
-            # Lazily remove expired entry on access
             if exp < time.time():
-                del self._blacklist[token]
+                del self._blacklist[h]
                 return False
             return True
 
     def cleanup(self) -> int:
-        """Remove expired entries. Returns number of entries removed."""
         now = time.time()
         with self._lock:
             expired = [t for t, exp in self._blacklist.items() if exp < now]
@@ -79,15 +104,83 @@ class TokenBlacklist:
             return len(expired)
 
     def size(self) -> int:
-        """Return current blacklist size."""
         return len(self._blacklist)
 
     def stop(self) -> None:
-        """Stop the cleanup timer (for graceful shutdown)."""
         if self._cleanup_timer is not None:
             self._cleanup_timer.cancel()
             self._cleanup_timer = None
 
 
+# ---------------------------------------------------------------------------
+# Redis backend
+# ---------------------------------------------------------------------------
+
+class _RedisBlacklist(_TokenBlacklistBackend):
+    """Redis-backed token blacklist.  Uses SET + TTL for auto-expiry."""
+
+    _KEY_PREFIX = "tkbl:"  # token-blacklist namespace
+
+    def __init__(self, redis_url: str):
+        import redis
+        self._redis = redis.from_url(redis_url, decode_responses=True)
+        # Verify connectivity
+        self._redis.ping()
+        logger.info("Token blacklist using Redis backend")
+
+    @staticmethod
+    def _hash(token: str) -> str:
+        return hashlib.sha256(token.encode()).hexdigest()
+
+    def _key(self, token: str) -> str:
+        return f"{self._KEY_PREFIX}{self._hash(token)}"
+
+    def revoke(self, token: str, expires_at: float | None = None) -> None:
+        ttl = int((expires_at or (time.time() + 86400)) - time.time())
+        if ttl <= 0:
+            return  # Already expired, no point blacklisting
+        self._redis.setex(self._key(token), ttl, "1")
+
+    def is_revoked(self, token: str) -> bool:
+        return self._redis.exists(self._key(token)) > 0
+
+    def cleanup(self) -> int:
+        # Redis handles expiry automatically via TTL; nothing to do.
+        return 0
+
+    def size(self) -> int:
+        # Count keys with our prefix (approximate).
+        cursor, keys = self._redis.scan(match=f"{self._KEY_PREFIX}*", count=1000)
+        count = len(keys)
+        while cursor:
+            cursor, batch = self._redis.scan(cursor=cursor, match=f"{self._KEY_PREFIX}*", count=1000)
+            count += len(batch)
+        return count
+
+    def stop(self) -> None:
+        try:
+            self._redis.close()
+        except Exception:
+            pass
+
+
+# ---------------------------------------------------------------------------
+# Factory – pick the best available backend
+# ---------------------------------------------------------------------------
+
+def _create_blacklist() -> _TokenBlacklistBackend:
+    """Create the best available token blacklist backend."""
+    from app.core.config import settings
+
+    if settings.redis_url:
+        try:
+            return _RedisBlacklist(settings.redis_url)
+        except Exception as e:
+            logger.warning(f"Redis unavailable ({e}), falling back to in-memory token blacklist")
+
+    logger.info("Token blacklist using in-memory backend (set REDIS_URL for multi-worker support)")
+    return _InMemoryBlacklist()
+
+
 # Global singleton
-token_blacklist = TokenBlacklist()
+token_blacklist: _TokenBlacklistBackend = _create_blacklist()
