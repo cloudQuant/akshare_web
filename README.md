@@ -298,6 +298,52 @@ cp .env.production .env
 nano .env  # 修改数据库、密钥等配置
 ```
 
+## 开发与代码质量
+
+### Make 命令
+
+**后端 (Python):**
+```bash
+make lint         # Ruff 检查与格式检查
+make format       # 自动格式化
+make security     # Bandit 安全扫描
+make typecheck    # Mypy 类型检查
+make test         # 运行测试
+make test-cov     # 运行测试并生成覆盖率报告（要求 ≥70%）
+make deps-audit   # pip-audit 依赖安全审计
+```
+
+**前端 (Node):**
+```bash
+make frontend-lint     # ESLint 检查
+make frontend-format   # Prettier 格式化
+make frontend-test     # Vitest 单元测试
+make frontend-test-cov # 前端测试覆盖率
+make frontend-typecheck # vue-tsc 类型检查
+```
+
+**综合:**
+```bash
+make quality        # 后端质量检查 (lint + security + deps-audit)
+make quality-full   # 后端 + 前端质量检查
+make pre-commit     # 运行所有 pre-commit 钩子
+```
+
+### Pre-commit 钩子
+
+提交前自动运行代码质量检查（Ruff、Bandit、ESLint、Prettier 等）：
+
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+之后每次 `git commit` 会自动执行检查。手动运行全部检查：
+
+```bash
+pre-commit run --all-files
+```
+
 ## 许可证
 
 MIT License

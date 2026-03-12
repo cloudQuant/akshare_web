@@ -21,7 +21,7 @@ class TestInterfaceLoaderInit:
         """Test CATEGORY_MAPPING constant exists."""
         from app.services.interface_loader import InterfaceLoader
 
-        assert hasattr(InterfaceLoader, 'CATEGORY_MAPPING')
+        assert hasattr(InterfaceLoader, "CATEGORY_MAPPING")
         assert isinstance(InterfaceLoader.CATEGORY_MAPPING, dict)
 
 
@@ -143,13 +143,14 @@ class TestInterfaceLoaderLoadFromAkshare:
     @pytest.mark.asyncio
     async def test_load_from_akshare_method_exists(self):
         """Test load_from_akshare method exists and is async."""
-        from app.services.interface_loader import InterfaceLoader
         import inspect
+
+        from app.services.interface_loader import InterfaceLoader
 
         loader = InterfaceLoader()
 
         # Verify method exists and is async
-        assert hasattr(loader, 'load_from_akshare')
+        assert hasattr(loader, "load_from_akshare")
         assert inspect.iscoroutinefunction(loader.load_from_akshare)
 
 
@@ -168,4 +169,3 @@ class TestInterfaceLoaderDiscoverFunctions:
         assert isinstance(functions, list)
         # Should have at least some functions
         assert len(functions) > 0
-

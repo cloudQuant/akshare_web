@@ -8,7 +8,7 @@ import type {
 
 export const dataApi = {
   // Trigger data download
-  download(scriptId: number, parameters: Record<string, any>): Promise<{ execution_id: number; status: string }> {
+  download(scriptId: number, parameters: Record<string, unknown>): Promise<{ execution_id: number; status: string }> {
     return request({
       url: '/data/download',
       method: 'POST',

@@ -4,8 +4,9 @@ Database functions tests.
 Tests for database module functions to improve coverage.
 """
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 
 class TestCreateTables:
@@ -17,7 +18,7 @@ class TestCreateTables:
         from app.core.database import create_tables
 
         # Mock the engine
-        with patch('app.core.database.engine') as mock_engine:
+        with patch("app.core.database.engine") as mock_engine:
             result = await create_tables()
 
             # Function should complete without error
@@ -33,7 +34,7 @@ class TestInitDB:
         from app.core.database import init_db
 
         # Mock async session
-        with patch('app.core.database.async_session_maker') as mock_maker:
+        with patch("app.core.database.async_session_maker") as mock_maker:
             mock_session = AsyncMock()
             mock_maker.__aenter__ = AsyncMock(return_value=mock_session)
             mock_maker.__aexit__ = AsyncMock()
@@ -53,7 +54,7 @@ class TestCloseDB:
         from app.core.database import close_db
 
         # Mock the engine
-        with patch('app.core.database.engine') as mock_engine:
+        with patch("app.core.database.engine") as mock_engine:
             async_mock = AsyncMock()
             mock_engine.dispose = async_mock
 
@@ -72,7 +73,7 @@ class TestCheckDBConnection:
         from app.core.database import check_db_connection
 
         # Mock successful connection
-        with patch('app.core.database.async_session_maker') as mock_maker:
+        with patch("app.core.database.async_session_maker") as mock_maker:
             mock_session = AsyncMock()
             mock_session.execute = AsyncMock()
             mock_session.execute.return_value.scalar_one.return_value = 1
@@ -93,7 +94,7 @@ class TestCheckDBConnection:
         from app.core.database import check_db_connection
 
         # Mock failed connection
-        with patch('app.core.database.async_session_maker') as mock_maker:
+        with patch("app.core.database.async_session_maker") as mock_maker:
             mock_maker.side_effect = Exception("Connection failed")
 
             result = await check_db_connection()
@@ -107,8 +108,9 @@ class TestGetDB:
     @pytest.mark.asyncio
     async def test_get_db_generator(self):
         """Test get_db is a generator."""
-        from app.api.dependencies import get_db
         import inspect
+
+        from app.api.dependencies import get_db
 
         assert inspect.isasyncgenfunction(get_db)
 
@@ -171,7 +173,6 @@ class TestEngineConfiguration:
     def test_engine_url_from_settings(self):
         """Test engine URL comes from settings."""
         from app.core.database import engine
-        from app.core.config import settings
 
         # Verify engine exists and is configured
         assert engine is not None

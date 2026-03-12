@@ -1,6 +1,7 @@
 import request from '@/utils/request'
 import type {
   DataScript,
+  ExecutionStats,
   PaginationParams,
   PaginatedResponse,
 } from '@/types'
@@ -31,8 +32,7 @@ export const scriptApi = {
     })
   },
 
-  // Get statistics
-  getStats(): Promise<any> {
+  getStats(): Promise<ExecutionStats> {
     return request({
       url: '/scripts/stats',
       method: 'GET',
@@ -65,16 +65,14 @@ export const scriptApi = {
     })
   },
 
-  // Admin: Delete custom script
-  delete(scriptId: string): Promise<any> {
+  delete(scriptId: string): Promise<void> {
     return request({
       url: `/scripts/admin/scripts/${scriptId}`,
       method: 'DELETE',
     })
   },
 
-  // Admin: Scan scripts from filesystem
-  scan(): Promise<any> {
+  scan(): Promise<{ scanned?: number }> {
     return request({
       url: '/scripts/scan',
       method: 'POST',

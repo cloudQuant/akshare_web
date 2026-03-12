@@ -1,6 +1,6 @@
 import request from '@/utils/request'
 import type {
-  ApiResponse,
+  Execution,
   Task,
   PaginationParams,
   PaginatedResponse,
@@ -58,11 +58,10 @@ export const tasksApi = {
     })
   },
 
-  // Get task executions
   getExecutions(
     taskId: number,
     params?: PaginationParams
-  ): Promise<PaginatedResponse<any>> {
+  ): Promise<PaginatedResponse<Execution>> {
     return request({
       url: `/tasks/${taskId}/executions`,
       method: 'GET',

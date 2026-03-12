@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import { scriptsApi } from '@/api/scripts'
+import { getApiErrorMessage } from '@/utils/error'
 import type { DataScript } from '@/types'
 
 const router = useRouter()
@@ -47,14 +49,13 @@ async function loadScripts() {
       page: 1,
       page_size: 2000,
     })
-    scripts.value = (data as any).items || []
-    total.value = (data as any).total || 0
+    scripts.value = data.items ?? []
+    total.value = data.total ?? 0
 
-    // Extract unique categories
     const uniqueCategories = new Set(scripts.value.map((s) => s.category))
     categories.value = Array.from(uniqueCategories).sort()
   } catch (error) {
-    console.error('Failed to load scripts:', error)
+    ElMessage.error(getApiErrorMessage(error))
   } finally {
     loading.value = false
   }
@@ -88,15 +89,22 @@ onMounted(() => {
       <template #header>
         <div class="header">
           <span>数据接口</span>
-          <el-tag type="info">共 {{ total }} 个接口</el-tag>
+          <el-tag type="info">
+            共 {{ total }} 个接口
+          </el-tag>
         </div>
       </template>
 
       <div class="content">
         <!-- Category Filter -->
         <div class="category-filter">
-          <el-radio-group v-model="selectedCategory" @change="handleCategoryChange">
-            <el-radio-button value="">全部</el-radio-button>
+          <el-radio-group
+            v-model="selectedCategory"
+            @change="handleCategoryChange"
+          >
+            <el-radio-button value="">
+              全部
+            </el-radio-button>
             <el-radio-button
               v-for="category in categories"
               :key="category"
@@ -128,14 +136,32 @@ onMounted(() => {
           style="width: 100%"
           stripe
         >
-          <el-table-column prop="script_name" label="接口名称" min-width="200" />
-          <el-table-column prop="description" label="描述" show-overflow-tooltip />
-          <el-table-column prop="category" label="类别" width="120">
+          <el-table-column
+            prop="script_name"
+            label="接口名称"
+            min-width="200"
+          />
+          <el-table-column
+            prop="description"
+            label="描述"
+            show-overflow-tooltip
+          />
+          <el-table-column
+            prop="category"
+            label="类别"
+            width="120"
+          >
             <template #default="{ row }">
-              <el-tag size="small">{{ row.category }}</el-tag>
+              <el-tag size="small">
+                {{ row.category }}
+              </el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="150" fixed="right">
+          <el-table-column
+            label="操作"
+            width="150"
+            fixed="right"
+          >
             <template #default="{ row }">
               <el-button
                 type="primary"

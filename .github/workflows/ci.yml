@@ -45,6 +45,18 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
           pip install -e .
+          pip install ruff bandit
+
+      - name: Lint and format check (Python)
+        run: |
+          ruff check app/ tests/
+          ruff format --check app/ tests/
+
+      - name: Security scan (Bandit)
+        run: bandit -r app/ -c bandit.yaml -ll
+
+      - name: Audit Python dependencies
+        run: pip install pip-audit && pip-audit
 
       - name: Check Alembic migrations are up to date
         env:
@@ -63,7 +75,7 @@ jobs:
           alembic upgrade head
           alembic check 2>&1 || echo "⚠️  Alembic detected model changes without a migration. Run: alembic revision --autogenerate -m 'description'"
 
-      - name: Run tests
+      - name: Run tests with coverage
         env:
           MYSQL_HOST: 127.0.0.1
           MYSQL_PORT: 3306
@@ -77,7 +89,10 @@ jobs:
           DATA_MYSQL_DATABASE: akshare_web_test
           SECRET_KEY: ci-test-secret-key-not-for-production
         run: |
-          pytest tests/ -x -q --tb=short --timeout=120 2>&1 | tail -50
+          pytest tests/ -x -q --tb=short --timeout=120 --cov=app --cov-report=term-missing --cov-fail-under=70
+
+      - name: Type check (mypy)
+        run: pip install mypy && mypy app/
 
   # Frontend linting and build
   frontend:
@@ -102,8 +117,114 @@ jobs:
       - name: Type check
         run: npx vue-tsc --noEmit
 
+      - name: Lint
+        run: npm run lint
+
+      - name: Check formatting (Prettier)
+        run: npx prettier --check src/
+
+      - name: Run unit tests with coverage
+        run: npx vitest run --testTimeout=15000 --coverage
+
+      - name: Audit npm dependencies
+        run: npm audit --audit-level=high
+
       - name: Build
         run: npm run build
+
+  # E2E tests (Playwright)
+  e2e:
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test_root_pass
+          MYSQL_DATABASE: akshare_web_test
+          MYSQL_USER: test_user
+          MYSQL_PASSWORD: test_pass
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install backend dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e .
+
+      - name: Run migrations
+        env:
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_PORT: 3306
+          MYSQL_USER: test_user
+          MYSQL_PASSWORD: test_pass
+          MYSQL_DATABASE: akshare_web_test
+          DATA_MYSQL_HOST: 127.0.0.1
+          DATA_MYSQL_PORT: 3306
+          DATA_MYSQL_USER: test_user
+          DATA_MYSQL_PASSWORD: test_pass
+          DATA_MYSQL_DATABASE: akshare_web_test
+          SECRET_KEY: e2e-test-secret-key
+        run: alembic upgrade head
+
+      - name: Start backend server
+        env:
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_PORT: 3306
+          MYSQL_USER: test_user
+          MYSQL_PASSWORD: test_pass
+          MYSQL_DATABASE: akshare_web_test
+          DATA_MYSQL_HOST: 127.0.0.1
+          DATA_MYSQL_PORT: 3306
+          DATA_MYSQL_USER: test_user
+          DATA_MYSQL_PASSWORD: test_pass
+          DATA_MYSQL_DATABASE: akshare_web_test
+          SECRET_KEY: e2e-test-secret-key
+        run: |
+          uvicorn app.main:app --host 0.0.0.0 --port 8000 &
+
+      - name: Wait for backend
+        run: |
+          for i in $(seq 1 30); do
+            curl -s http://localhost:8000/health 2>/dev/null && break
+            sleep 2
+          done
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Playwright browsers
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run E2E tests
+        working-directory: frontend
+        run: npx playwright test
+        env:
+          CI: "true"
 
   # Docker build check (no push)
   docker:

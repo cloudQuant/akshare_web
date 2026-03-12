@@ -2,9 +2,9 @@
 Direct tests for data_fetch retry utility to maximize coverage.
 """
 
-import pytest
-import time
 from unittest.mock import patch
+
+import pytest
 
 from app.data_fetch.utils.retry import retry_on_exception
 
@@ -42,13 +42,13 @@ class TestRetryOnException:
         def always_fail():
             raise RuntimeError("always")
 
-        with patch("time.sleep"):
-            with pytest.raises(RuntimeError, match="always"):
-                always_fail()
+        with patch("time.sleep"), pytest.raises(RuntimeError, match="always"):
+            always_fail()
 
     def test_logger_from_self(self):
         """Test that logger is taken from self if available."""
         import logging
+
         mock_logger = logging.getLogger("test_self")
 
         class MyClass:
@@ -63,6 +63,7 @@ class TestRetryOnException:
 
     def test_custom_logger(self):
         import logging
+
         custom = logging.getLogger("custom_test")
 
         @retry_on_exception(max_retries=1, retry_delay=0, logger=custom)

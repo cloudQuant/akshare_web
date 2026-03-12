@@ -5,17 +5,21 @@ Provides dependency injection functions for authentication,
 database access, and permission checking.
 """
 
-from collections.abc import AsyncGenerator
+from __future__ import annotations
+
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.security import verify_token, PermissionChecker
+from app.core.security import verify_token
 from app.models.user import User, UserRole
+from app.services.data_service import DataService
+from app.services.execution_service import ExecutionService
+from app.services.script_service import ScriptService
 
 # HTTP Bearer token scheme
 security = HTTPBearer(auto_error=False)
@@ -49,6 +53,7 @@ async def get_current_user(
 
     # Check if token has been revoked (logout)
     from app.core.token_blacklist import token_blacklist
+
     if token_blacklist.is_revoked(token):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -170,27 +175,25 @@ async def get_optional_user(
 # Service-layer dependency injection
 # ---------------------------------------------------------------------------
 
+
 def get_execution_service(
     db: Annotated[AsyncSession, Depends(get_db)],
-):
+) -> ExecutionService:
     """Get ExecutionService instance via dependency injection."""
-    from app.services.execution_service import ExecutionService
     return ExecutionService(db)
 
 
 def get_script_service(
     db: Annotated[AsyncSession, Depends(get_db)],
-):
+) -> ScriptService:
     """Get ScriptService instance via dependency injection."""
-    from app.services.script_service import ScriptService
     return ScriptService(db)
 
 
 def get_data_service(
     db: Annotated[AsyncSession, Depends(get_db)],
-):
+) -> DataService:
     """Get DataService instance via dependency injection."""
-    from app.services.data_service import DataService
     return DataService(db)
 
 

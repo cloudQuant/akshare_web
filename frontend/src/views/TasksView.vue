@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { tasksApi } from '@/api/tasks'
 import { scriptsApi } from '@/api/scripts'
+import { getApiErrorMessage } from '@/utils/error'
 import type { Task, DataScript } from '@/types'
 
 const router = useRouter()
@@ -24,7 +25,7 @@ const taskForm = ref({
   script_id: '',
   schedule_type: 'daily',
   schedule_expression: '0 0 * * *',
-  parameters: {} as Record<string, any>,
+  parameters: {} as Record<string, unknown>,
   is_active: true,
 })
 
@@ -43,10 +44,10 @@ async function loadTasks() {
       page: currentPage.value,
       page_size: pageSize.value,
     })
-    tasks.value = (data as any).items || []
-    total.value = (data as any).total || 0
+    tasks.value = data.items ?? []
+    total.value = data.total ?? 0
   } catch (error) {
-    console.error('Failed to load tasks:', error)
+    ElMessage.error(getApiErrorMessage(error))
   } finally {
     loading.value = false
   }
@@ -55,9 +56,9 @@ async function loadTasks() {
 async function loadScripts() {
   try {
     const data = await scriptsApi.list({ page: 1, page_size: 2000 })
-    scripts.value = (data as any).items || []
+    scripts.value = data.items ?? []
   } catch (error) {
-    console.error('Failed to load scripts:', error)
+    ElMessage.error(getApiErrorMessage(error))
   }
 }
 
@@ -81,7 +82,7 @@ function handleEdit(task: Task) {
   taskForm.value = {
     name: task.name,
     script_id: task.script_id,
-    schedule_type: task.schedule_type as any,
+    schedule_type: task.schedule_type,
     schedule_expression: task.schedule_expression,
     parameters: { ...(task.parameters || {}) },
     is_active: task.is_active,
@@ -97,9 +98,9 @@ async function handleDelete(task: Task) {
     await tasksApi.delete(task.id)
     ElMessage.success('删除成功')
     loadTasks()
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error !== 'cancel') {
-      console.error('Failed to delete task:', error)
+      ElMessage.error(getApiErrorMessage(error))
     }
   }
 }
@@ -109,7 +110,7 @@ async function handleToggle(task: Task) {
     await tasksApi.update(task.id, { is_active: !task.is_active })
     loadTasks()
   } catch (error) {
-    console.error('Failed to toggle task:', error)
+    ElMessage.error(getApiErrorMessage(error))
   }
 }
 
@@ -125,7 +126,7 @@ async function handleSubmit() {
     dialogVisible.value = false
     loadTasks()
   } catch (error) {
-    console.error('Failed to save task:', error)
+    ElMessage.error(getApiErrorMessage(error))
   }
 }
 
@@ -152,7 +153,10 @@ onMounted(() => {
       <template #header>
         <div class="header">
           <span>定时任务</span>
-          <el-button type="primary" @click="handleCreate">
+          <el-button
+            type="primary"
+            @click="handleCreate"
+          >
             创建任务
           </el-button>
         </div>
@@ -164,15 +168,35 @@ onMounted(() => {
         style="width: 100%"
         stripe
       >
-        <el-table-column prop="name" label="任务名称" min-width="180" />
-        <el-table-column prop="script_id" label="脚本ID" width="100" />
-        <el-table-column label="调度类型" width="100">
+        <el-table-column
+          prop="name"
+          label="任务名称"
+          min-width="180"
+        />
+        <el-table-column
+          prop="script_id"
+          label="脚本ID"
+          width="100"
+        />
+        <el-table-column
+          label="调度类型"
+          width="100"
+        >
           <template #default="{ row }">
-            <el-tag size="small">{{ row.schedule_type }}</el-tag>
+            <el-tag size="small">
+              {{ row.schedule_type }}
+            </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="schedule_expression" label="Cron 表达式" width="150" />
-        <el-table-column label="状态" width="80">
+        <el-table-column
+          prop="schedule_expression"
+          label="Cron 表达式"
+          width="150"
+        />
+        <el-table-column
+          label="状态"
+          width="80"
+        >
           <template #default="{ row }">
             <el-switch
               :model-value="row.is_active"
@@ -180,20 +204,42 @@ onMounted(() => {
             />
           </template>
         </el-table-column>
-        <el-table-column prop="next_run_time" label="下次执行" width="180">
+        <el-table-column
+          prop="next_run_time"
+          label="下次执行"
+          width="180"
+        >
           <template #default="{ row }">
             {{ row.next_execution_at ? new Date(row.next_execution_at).toLocaleString() : '-' }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="220" fixed="right">
+        <el-table-column
+          label="操作"
+          width="220"
+          fixed="right"
+        >
           <template #default="{ row }">
-            <el-button type="primary" link size="small" @click="handleEdit(row)">
+            <el-button
+              type="primary"
+              link
+              size="small"
+              @click="handleEdit(row)"
+            >
               编辑
             </el-button>
-            <el-button link size="small" @click="handleViewExecutions(row)">
+            <el-button
+              link
+              size="small"
+              @click="handleViewExecutions(row)"
+            >
               执行记录
             </el-button>
-            <el-button type="danger" link size="small" @click="handleDelete(row)">
+            <el-button
+              type="danger"
+              link
+              size="small"
+              @click="handleDelete(row)"
+            >
               删除
             </el-button>
           </template>
@@ -217,12 +263,24 @@ onMounted(() => {
       :title="dialogMode === 'create' ? '创建任务' : '编辑任务'"
       width="600px"
     >
-      <el-form :model="taskForm" label-width="100px">
-        <el-form-item label="任务名称" required>
-          <el-input v-model="taskForm.name" placeholder="请输入任务名称" />
+      <el-form
+        :model="taskForm"
+        label-width="100px"
+      >
+        <el-form-item
+          label="任务名称"
+          required
+        >
+          <el-input
+            v-model="taskForm.name"
+            placeholder="请输入任务名称"
+          />
         </el-form-item>
 
-        <el-form-item label="数据接口" required>
+        <el-form-item
+          label="数据接口"
+          required
+        >
           <el-select
             v-model="taskForm.script_id"
             placeholder="请选择数据接口"
@@ -237,11 +295,14 @@ onMounted(() => {
           </el-select>
         </el-form-item>
 
-        <el-form-item label="调度类型" required>
+        <el-form-item
+          label="调度类型"
+          required
+        >
           <el-select
             v-model="taskForm.schedule_type"
-            @change="handleScheduleChange"
             style="width: 100%"
+            @change="handleScheduleChange"
           >
             <el-option
               v-for="opt in scheduleOptions"
@@ -252,7 +313,10 @@ onMounted(() => {
           </el-select>
         </el-form-item>
 
-        <el-form-item label="Cron 表达式" required>
+        <el-form-item
+          label="Cron 表达式"
+          required
+        >
           <el-input
             v-model="taskForm.schedule_expression"
             placeholder="请输入 Cron 表达式，如: 0 0 * * *"
@@ -268,8 +332,13 @@ onMounted(() => {
       </el-form>
 
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSubmit">
+        <el-button @click="dialogVisible = false">
+          取消
+        </el-button>
+        <el-button
+          type="primary"
+          @click="handleSubmit"
+        >
           {{ dialogMode === 'create' ? '创建' : '保存' }}
         </el-button>
       </template>

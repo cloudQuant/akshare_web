@@ -4,10 +4,8 @@ Data interface API routes.
 Provides endpoints for browsing and managing akshare data interfaces.
 """
 
-from typing import Any
-
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -17,19 +15,20 @@ from app.api.schemas import (
     CategoryResponse,
     InterfaceListResponse,
     InterfaceResponse,
-    InterfaceParameterSchema,
-    PaginatedResponse,
     PaginatedParams,
+    PaginatedResponse,
 )
-from app.models.interface import DataInterface, InterfaceCategory, InterfaceParameter
+from app.models.interface import DataInterface, InterfaceCategory
 
 router = APIRouter()
 
 
-@router.get("/categories", )
+@router.get(
+    "/categories",
+)
 async def list_categories(
     db: AsyncSession = Depends(get_db),
-):
+) -> APIResponse:
     """
     List all interface categories.
 
@@ -42,8 +41,7 @@ async def list_categories(
         return APIResponse(success=True, message="success", data=cached)
 
     result = await db.execute(
-        select(InterfaceCategory)
-        .order_by(InterfaceCategory.sort_order, InterfaceCategory.name)
+        select(InterfaceCategory).order_by(InterfaceCategory.sort_order, InterfaceCategory.name)
     )
     categories = result.scalars().all()
 
@@ -57,14 +55,16 @@ async def list_categories(
     )
 
 
-@router.get("/", )
+@router.get(
+    "/",
+)
 async def list_interfaces(
     db: AsyncSession = Depends(get_db),
     params: PaginatedParams = Depends(),
     category_id: int | None = Query(None, description="Filter by category ID"),
     search: str | None = Query(None, description="Search by name or description"),
     is_active: bool | None = Query(None, description="Filter by active status"),
-):
+) -> APIResponse:
     """
     List data interfaces with pagination.
 
@@ -121,20 +121,22 @@ async def list_interfaces(
         success=True,
         message="success",
         data=PaginatedResponse(
-        items=items,
-        total=total,
-        page=params.page,
-        page_size=params.page_size,
-        total_pages=(total + params.page_size - 1) // params.page_size,
-    ).model_dump()
+            items=items,
+            total=total,
+            page=params.page,
+            page_size=params.page_size,
+            total_pages=(total + params.page_size - 1) // params.page_size,
+        ).model_dump(),
     )
 
 
-@router.get("/{interface_id}", )
+@router.get(
+    "/{interface_id}",
+)
 async def get_interface(
     interface_id: int,
     db: AsyncSession = Depends(get_db),
-):
+) -> APIResponse:
     """
     Get data interface details.
 
@@ -161,39 +163,37 @@ async def get_interface(
         success=True,
         message="success",
         data=InterfaceResponse(
-        id=iface.id,
-        name=iface.name,
-        display_name=iface.display_name,
-        description=iface.description,
-        category_id=iface.category_id,
-        category_name=iface.category.name if iface.category else None,
-        module_path=iface.module_path,
-        function_name=iface.function_name,
-        parameters=iface.parameters,
-        return_type=iface.return_type,
-        example=iface.example,
-        is_active=iface.is_active,
-    ).model_dump()
+            id=iface.id,
+            name=iface.name,
+            display_name=iface.display_name,
+            description=iface.description,
+            category_id=iface.category_id,
+            category_name=iface.category.name if iface.category else None,
+            module_path=iface.module_path,
+            function_name=iface.function_name,
+            parameters=iface.parameters,
+            return_type=iface.return_type,
+            example=iface.example,
+            is_active=iface.is_active,
+        ).model_dump(),
     )
 
 
-@router.post("/",  status_code=status.HTTP_201_CREATED)
+@router.post("/", status_code=status.HTTP_201_CREATED)
 async def create_interface(
     current_admin: CurrentAdmin,
     name: str,
     display_name: str,
     category_id: int,
     db: AsyncSession = Depends(get_db),
-):
+) -> APIResponse:
     """
     Create a new data interface.
 
     Admin only endpoint for adding new data interfaces.
     """
     # Verify category exists
-    result = await db.execute(
-        select(InterfaceCategory).where(InterfaceCategory.id == category_id)
-    )
+    result = await db.execute(select(InterfaceCategory).where(InterfaceCategory.id == category_id))
     if result.scalar_one_or_none() is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -220,7 +220,9 @@ async def create_interface(
     )
 
 
-@router.put("/{interface_id}", )
+@router.put(
+    "/{interface_id}",
+)
 async def update_interface(
     current_admin: CurrentAdmin,
     interface_id: int,
@@ -228,15 +230,13 @@ async def update_interface(
     description: str | None = None,
     is_active: bool | None = None,
     db: AsyncSession = Depends(get_db),
-):
+) -> APIResponse:
     """
     Update data interface.
 
     Admin only endpoint for updating interface details.
     """
-    result = await db.execute(
-        select(DataInterface).where(DataInterface.id == interface_id)
-    )
+    result = await db.execute(select(DataInterface).where(DataInterface.id == interface_id))
     iface = result.scalar_one_or_none()
 
     if iface is None:
@@ -261,20 +261,20 @@ async def update_interface(
     )
 
 
-@router.delete("/{interface_id}", )
+@router.delete(
+    "/{interface_id}",
+)
 async def delete_interface(
     current_admin: CurrentAdmin,
     interface_id: int,
     db: AsyncSession = Depends(get_db),
-):
+) -> APIResponse:
     """
     Delete data interface.
 
     Admin only endpoint for deleting interfaces.
     """
-    result = await db.execute(
-        select(DataInterface).where(DataInterface.id == interface_id)
-    )
+    result = await db.execute(select(DataInterface).where(DataInterface.id == interface_id))
     iface = result.scalar_one_or_none()
 
     if iface is None:

@@ -6,7 +6,6 @@ import type { ExecutionStats, DataScript } from '@/types'
 
 const stats = ref<ExecutionStats | null>(null)
 const recentScripts = ref<DataScript[]>([])
-const loading = ref(false)
 
 async function loadStats() {
   try {
@@ -32,10 +31,16 @@ onMounted(() => {
       <el-col :span="6">
         <el-card class="stat-card">
           <div class="stat-content">
-            <el-icon class="stat-icon primary"><Document /></el-icon>
+            <el-icon class="stat-icon primary">
+              <Document />
+            </el-icon>
             <div class="stat-info">
-              <div class="stat-value">{{ stats?.total_count || 0 }}</div>
-              <div class="stat-label">总执行次数</div>
+              <div class="stat-value">
+                {{ stats?.total_count || 0 }}
+              </div>
+              <div class="stat-label">
+                总执行次数
+              </div>
             </div>
           </div>
         </el-card>
@@ -43,10 +48,16 @@ onMounted(() => {
       <el-col :span="6">
         <el-card class="stat-card">
           <div class="stat-content">
-            <el-icon class="stat-icon success"><CircleCheck /></el-icon>
+            <el-icon class="stat-icon success">
+              <CircleCheck />
+            </el-icon>
             <div class="stat-info">
-              <div class="stat-value">{{ stats?.success_count || 0 }}</div>
-              <div class="stat-label">成功次数</div>
+              <div class="stat-value">
+                {{ stats?.success_count || 0 }}
+              </div>
+              <div class="stat-label">
+                成功次数
+              </div>
             </div>
           </div>
         </el-card>
@@ -54,10 +65,16 @@ onMounted(() => {
       <el-col :span="6">
         <el-card class="stat-card">
           <div class="stat-content">
-            <el-icon class="stat-icon danger"><CircleClose /></el-icon>
+            <el-icon class="stat-icon danger">
+              <CircleClose />
+            </el-icon>
             <div class="stat-info">
-              <div class="stat-value">{{ stats?.failed_count || 0 }}</div>
-              <div class="stat-label">失败次数</div>
+              <div class="stat-value">
+                {{ stats?.failed_count || 0 }}
+              </div>
+              <div class="stat-label">
+                失败次数
+              </div>
             </div>
           </div>
         </el-card>
@@ -65,19 +82,26 @@ onMounted(() => {
       <el-col :span="6">
         <el-card class="stat-card">
           <div class="stat-content">
-            <el-icon class="stat-icon warning"><TrendCharts /></el-icon>
+            <el-icon class="stat-icon warning">
+              <TrendCharts />
+            </el-icon>
             <div class="stat-info">
               <div class="stat-value">
                 {{ stats?.success_rate ? (stats.success_rate * 100).toFixed(1) : 0 }}%
               </div>
-              <div class="stat-label">成功率</div>
+              <div class="stat-label">
+                成功率
+              </div>
             </div>
           </div>
         </el-card>
       </el-col>
     </el-row>
 
-    <el-row :gutter="20" style="margin-top: 20px">
+    <el-row
+      :gutter="20"
+      style="margin-top: 20px"
+    >
       <el-col :span="12">
         <el-card>
           <template #header>
@@ -86,15 +110,24 @@ onMounted(() => {
             </div>
           </template>
           <div class="quick-actions">
-            <el-button type="primary" @click="$router.push('/scripts')">
+            <el-button
+              type="primary"
+              @click="$router.push('/scripts')"
+            >
               <el-icon><DataLine /></el-icon>
               浏览数据接口
             </el-button>
-            <el-button type="success" @click="$router.push('/tasks')">
+            <el-button
+              type="success"
+              @click="$router.push('/tasks')"
+            >
               <el-icon><Timer /></el-icon>
               创建定时任务
             </el-button>
-            <el-button type="info" @click="$router.push('/tables')">
+            <el-button
+              type="info"
+              @click="$router.push('/tables')"
+            >
               <el-icon><Grid /></el-icon>
               查看数据表
             </el-button>
@@ -113,11 +146,28 @@ onMounted(() => {
               <span>最近使用的接口</span>
             </div>
           </template>
-          <el-empty v-if="recentScripts.length === 0" description="暂无数据" />
-          <el-table v-else :data="recentScripts" style="width: 100%">
-            <el-table-column prop="script_name" label="接口名称" />
-            <el-table-column prop="category" label="类别" width="120" />
-            <el-table-column label="操作" width="100">
+          <el-empty
+            v-if="recentScripts.length === 0"
+            description="暂无数据"
+          />
+          <el-table
+            v-else
+            :data="recentScripts"
+            style="width: 100%"
+          >
+            <el-table-column
+              prop="script_name"
+              label="接口名称"
+            />
+            <el-table-column
+              prop="category"
+              label="类别"
+              width="120"
+            />
+            <el-table-column
+              label="操作"
+              width="100"
+            >
               <template #default="{ row }">
                 <el-button
                   type="primary"

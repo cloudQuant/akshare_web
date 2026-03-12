@@ -6,6 +6,8 @@ Stock Zh A Hist Em
 频率: daily
 """
 
+from typing import Any
+
 import pandas as pd
 
 from app.data_fetch.providers.akshare_provider import AkshareProvider
@@ -14,7 +16,11 @@ from app.data_fetch.providers.akshare_provider import AkshareProvider
 class StockZhAHistEm(AkshareProvider):
     """A股历史行情数据"""
 
-    def __init__(self, db_url=None, logger=None):
+    def __init__(
+        self,
+        db_url: str | None = None,
+        logger: Any = None,  # noqa: ANN401
+    ) -> None:
         super().__init__(db_url, logger)
         self.table_name = "stock_zh_a_hist"
         self.create_table_sql = """
@@ -40,7 +46,13 @@ class StockZhAHistEm(AkshareProvider):
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='A股历史行情数据'
         """
 
-    def fetch_data(self, symbol="000001", period="daily", start_date="20240101", adjust="qfq"):
+    def fetch_data(
+        self,
+        symbol: str = "000001",
+        period: str = "daily",
+        start_date: str = "20240101",
+        adjust: str = "qfq",
+    ) -> pd.DataFrame:
         """
         获取A股历史行情数据
 
@@ -60,7 +72,7 @@ class StockZhAHistEm(AkshareProvider):
                 symbol=symbol,
                 period=period,
                 start_date=start_date,
-                adjust=adjust
+                adjust=adjust,
             )
 
             if df is None or df.empty:
@@ -81,7 +93,7 @@ class StockZhAHistEm(AkshareProvider):
             return pd.DataFrame()
 
 
-def main():
+def main() -> None:
     """主函数"""
     script = StockZhAHistEm()
     script.fetch_data()

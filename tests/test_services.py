@@ -5,11 +5,7 @@ Tests for service methods that don't require complex model relationships.
 """
 
 import pytest
-from datetime import UTC, datetime
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.models.user import User, UserRole
-from app.core.security import hash_password
 
 
 class TestDataAcquisitionService:
@@ -120,8 +116,8 @@ class TestExecutionService:
     @pytest.mark.asyncio
     async def test_delete_executions_by_status_empty(self, test_db: AsyncSession):
         """Test deleting executions when none exist."""
-        from app.services.execution_service import ExecutionService
         from app.models.task import TaskStatus
+        from app.services.execution_service import ExecutionService
 
         service = ExecutionService(test_db)
         count = await service.delete_executions_by_status(TaskStatus.FAILED)

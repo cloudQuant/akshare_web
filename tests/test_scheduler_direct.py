@@ -2,10 +2,12 @@
 Direct tests for TaskScheduler to maximize coverage.
 """
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
-from app.services.scheduler import TaskScheduler
+
 from app.models.task import ScheduledTask, ScheduleType
+from app.services.scheduler import TaskScheduler
 
 
 class TestTaskSchedulerInit:
@@ -99,9 +101,11 @@ class TestStartShutdown:
     async def test_start(self):
         ts = TaskScheduler()
         mock_svc = AsyncMock()
-        with patch("app.services.scheduler.init_scheduler_service", return_value=mock_svc):
-            with patch.object(ts, "_load_active_tasks", new_callable=AsyncMock):
-                await ts.start()
+        with (
+            patch("app.services.scheduler.init_scheduler_service", return_value=mock_svc),
+            patch.object(ts, "_load_active_tasks", new_callable=AsyncMock),
+        ):
+            await ts.start()
         assert ts._running is True
         assert ts.scheduler_service is mock_svc
 

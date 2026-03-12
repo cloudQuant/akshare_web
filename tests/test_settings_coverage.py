@@ -2,10 +2,11 @@
 Tests for settings.py covering test_database_connection with aiomysql and fallback paths.
 """
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from app.api.settings import test_database_connection, TestConnectionRequest
+import pytest
+
+from app.api.settings import TestConnectionRequest, test_database_connection
 
 
 @pytest.fixture
@@ -23,14 +24,14 @@ def db():
 @pytest.fixture
 def req():
     return TestConnectionRequest(
-        host="localhost", port=3306, database="testdb",
-        user="root", password="pass"
+        host="localhost", port=3306, database="testdb", user="root", password="pass"
     )
 
 
 class TestDatabaseConnection:
     def _make_aiomysql_mock(self, fetchone_result):
         import types
+
         mock_aiomysql = types.ModuleType("aiomysql")
         mock_cursor = AsyncMock()
         mock_cursor.execute = AsyncMock()
@@ -40,6 +41,7 @@ class TestDatabaseConnection:
         class FakeCursorCtx:
             async def __aenter__(self_inner):
                 return mock_cursor
+
             async def __aexit__(self_inner, *args):
                 pass
 
@@ -53,6 +55,7 @@ class TestDatabaseConnection:
     @pytest.mark.asyncio
     async def test_aiomysql_success(self, req, admin_user, db):
         import sys
+
         mock_aiomysql = self._make_aiomysql_mock((1,))
         with patch.dict(sys.modules, {"aiomysql": mock_aiomysql}):
             result = await test_database_connection(req, admin_user, db)
@@ -61,6 +64,7 @@ class TestDatabaseConnection:
     @pytest.mark.asyncio
     async def test_aiomysql_bad_result(self, req, admin_user, db):
         import sys
+
         mock_aiomysql = self._make_aiomysql_mock((0,))
 
         with patch.dict(sys.modules, {"aiomysql": mock_aiomysql}):
@@ -70,7 +74,9 @@ class TestDatabaseConnection:
     @pytest.mark.asyncio
     async def test_import_error_fallback_success(self, req, admin_user, db):
         """When aiomysql not available, fall back to SQLAlchemy."""
-        import sys, builtins
+        import builtins
+        import sys
+
         real_import = builtins.__import__
 
         def mock_import(name, *args, **kwargs):
@@ -84,15 +90,19 @@ class TestDatabaseConnection:
         mock_engine.connect.return_value.__exit__ = MagicMock(return_value=False)
 
         # Remove aiomysql from sys.modules to force re-import
-        with patch.dict(sys.modules, {"aiomysql": None}), \
-             patch("builtins.__import__", side_effect=mock_import), \
-             patch("sqlalchemy.create_engine", return_value=mock_engine):
+        with (
+            patch.dict(sys.modules, {"aiomysql": None}),
+            patch("builtins.__import__", side_effect=mock_import),
+            patch("sqlalchemy.create_engine", return_value=mock_engine),
+        ):
             result = await test_database_connection(req, admin_user, db)
         assert result.success is True
 
     @pytest.mark.asyncio
     async def test_general_exception(self, req, admin_user, db):
-        import types, sys
+        import sys
+        import types
+
         mock_aiomysql = types.ModuleType("aiomysql")
         mock_aiomysql.connect = AsyncMock(side_effect=ConnectionError("refused"))
 

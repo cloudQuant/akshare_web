@@ -6,8 +6,9 @@ This module provides conditional rate limiting that can be disabled in tests.
 """
 
 import os
+from collections.abc import Callable
 from functools import wraps
-from typing import Callable, Any
+from typing import Any
 
 from fastapi import Request
 from slowapi import Limiter
@@ -36,7 +37,7 @@ def get_limiter() -> Limiter | None:
     return _limiter
 
 
-def rate_limit(limit_string: str):
+def rate_limit(limit_string: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """
     Conditional rate limiting decorator.
 
@@ -49,9 +50,10 @@ def rate_limit(limit_string: str):
     Returns:
         Decorator function
     """
+
     def decorator(func: Callable) -> Callable:
         @wraps(func)
-        async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
+        async def async_wrapper(*args: Any, **kwargs: Any) -> Any:  # noqa: ANN401
             if is_testing():
                 return await func(*args, **kwargs)
 
@@ -66,13 +68,14 @@ def rate_limit(limit_string: str):
             if request is not None:
                 lim = get_limiter()
                 if lim is not None:
-                    # Use slowapi's internal check
-                    lim._check_request_limit(request, func, [limit_string])
+                    # slowapi Limiter._check_request_limit internal API; arg types differ from stubs
+                    lim._check_request_limit(request, func, [limit_string])  # type: ignore[arg-type]
 
             return await func(*args, **kwargs)
 
-        async_wrapper.__rate_limit_string__ = limit_string
-        async_wrapper.__original_func__ = func
+        # slowapi expects these attributes for rate limit introspection
+        async_wrapper.__rate_limit_string__ = limit_string  # type: ignore[attr-defined]
+        async_wrapper.__original_func__ = func  # type: ignore[attr-defined]
 
         return async_wrapper
 

@@ -4,10 +4,8 @@ Extended CLI module tests.
 Additional tests for CLI commands and functionality.
 """
 
-import pytest
 import click
 from click.testing import CliRunner
-from unittest.mock import AsyncMock, MagicMock, patch
 
 
 class TestCLICommandsExtended:

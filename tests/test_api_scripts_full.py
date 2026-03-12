@@ -45,7 +45,9 @@ class TestGetScripts:
         assert data["data"]["total"] >= 2
 
     @pytest.mark.asyncio
-    async def test_get_scripts_with_category(self, test_client: AsyncClient, test_user_token: str, test_db):
+    async def test_get_scripts_with_category(
+        self, test_client: AsyncClient, test_user_token: str, test_db
+    ):
         """Test listing scripts filtered by category."""
         await _create_script(test_db, "cat_filter_1", category="futures")
 
@@ -54,7 +56,9 @@ class TestGetScripts:
         assert response.status_code == 200
 
     @pytest.mark.asyncio
-    async def test_get_scripts_with_keyword(self, test_client: AsyncClient, test_user_token: str, test_db):
+    async def test_get_scripts_with_keyword(
+        self, test_client: AsyncClient, test_user_token: str, test_db
+    ):
         """Test listing scripts with keyword search."""
         await _create_script(test_db, "kw_search", script_name="UniqueKeywordName")
 
@@ -63,7 +67,9 @@ class TestGetScripts:
         assert response.status_code == 200
 
     @pytest.mark.asyncio
-    async def test_get_scripts_with_active_filter(self, test_client: AsyncClient, test_user_token: str, test_db):
+    async def test_get_scripts_with_active_filter(
+        self, test_client: AsyncClient, test_user_token: str, test_db
+    ):
         """Test listing scripts with active filter."""
         await _create_script(test_db, "active_filter", is_active=False)
 
@@ -175,7 +181,9 @@ class TestToggleScript:
         assert response.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_toggle_script_as_user(self, test_client: AsyncClient, test_user_token: str, test_db):
+    async def test_toggle_script_as_user(
+        self, test_client: AsyncClient, test_user_token: str, test_db
+    ):
         """Test toggling script as regular user (should be forbidden)."""
         await _create_script(test_db, "toggle_user_test")
 
@@ -191,27 +199,37 @@ class TestCreateCustomScript:
     async def test_create_custom_script(self, test_client: AsyncClient, test_admin_token: str):
         """Test creating a custom script."""
         headers = {"Authorization": f"Bearer {test_admin_token}"}
-        response = await test_client.post("/api/scripts/admin/scripts", headers=headers, json={
-            "script_id": "custom_new_script",
-            "script_name": "Custom New Script",
-            "category": "stock",
-            "description": "A custom test script",
-        })
+        response = await test_client.post(
+            "/api/scripts/admin/scripts",
+            headers=headers,
+            json={
+                "script_id": "custom_new_script",
+                "script_name": "Custom New Script",
+                "category": "stock",
+                "description": "A custom test script",
+            },
+        )
         assert response.status_code == 201
         data = response.json()
         assert data["success"] is True
 
     @pytest.mark.asyncio
-    async def test_create_duplicate_script(self, test_client: AsyncClient, test_admin_token: str, test_db):
+    async def test_create_duplicate_script(
+        self, test_client: AsyncClient, test_admin_token: str, test_db
+    ):
         """Test creating script with duplicate ID."""
         await _create_script(test_db, "dup_script")
 
         headers = {"Authorization": f"Bearer {test_admin_token}"}
-        response = await test_client.post("/api/scripts/admin/scripts", headers=headers, json={
-            "script_id": "dup_script",
-            "script_name": "Duplicate",
-            "category": "stock",
-        })
+        response = await test_client.post(
+            "/api/scripts/admin/scripts",
+            headers=headers,
+            json={
+                "script_id": "dup_script",
+                "script_name": "Duplicate",
+                "category": "stock",
+            },
+        )
         assert response.status_code == 400
 
 
@@ -224,10 +242,14 @@ class TestUpdateScript:
         await _create_script(test_db, "upd_script")
 
         headers = {"Authorization": f"Bearer {test_admin_token}"}
-        response = await test_client.put("/api/scripts/admin/scripts/upd_script", headers=headers, json={
-            "script_name": "Updated Name",
-            "description": "Updated description",
-        })
+        response = await test_client.put(
+            "/api/scripts/admin/scripts/upd_script",
+            headers=headers,
+            json={
+                "script_name": "Updated Name",
+                "description": "Updated description",
+            },
+        )
         assert response.status_code == 200
         data = response.json()
         assert data["data"]["script_name"] == "Updated Name"
@@ -236,9 +258,13 @@ class TestUpdateScript:
     async def test_update_nonexistent_script(self, test_client: AsyncClient, test_admin_token: str):
         """Test updating non-existent script."""
         headers = {"Authorization": f"Bearer {test_admin_token}"}
-        response = await test_client.put("/api/scripts/admin/scripts/nonexistent_xyz", headers=headers, json={
-            "script_name": "X",
-        })
+        response = await test_client.put(
+            "/api/scripts/admin/scripts/nonexistent_xyz",
+            headers=headers,
+            json={
+                "script_name": "X",
+            },
+        )
         assert response.status_code == 404
 
 
@@ -246,26 +272,36 @@ class TestDeleteScript:
     """Test delete script endpoint."""
 
     @pytest.mark.asyncio
-    async def test_delete_custom_script(self, test_client: AsyncClient, test_admin_token: str, test_db):
+    async def test_delete_custom_script(
+        self, test_client: AsyncClient, test_admin_token: str, test_db
+    ):
         """Test deleting a custom script."""
         await _create_script(test_db, "del_custom", is_custom=True)
 
         headers = {"Authorization": f"Bearer {test_admin_token}"}
-        response = await test_client.delete("/api/scripts/admin/scripts/del_custom", headers=headers)
+        response = await test_client.delete(
+            "/api/scripts/admin/scripts/del_custom", headers=headers
+        )
         assert response.status_code == 200
 
     @pytest.mark.asyncio
-    async def test_delete_system_script(self, test_client: AsyncClient, test_admin_token: str, test_db):
+    async def test_delete_system_script(
+        self, test_client: AsyncClient, test_admin_token: str, test_db
+    ):
         """Test deleting a system script (should be forbidden)."""
         await _create_script(test_db, "del_system", is_custom=False)
 
         headers = {"Authorization": f"Bearer {test_admin_token}"}
-        response = await test_client.delete("/api/scripts/admin/scripts/del_system", headers=headers)
+        response = await test_client.delete(
+            "/api/scripts/admin/scripts/del_system", headers=headers
+        )
         assert response.status_code == 403
 
     @pytest.mark.asyncio
     async def test_delete_nonexistent_script(self, test_client: AsyncClient, test_admin_token: str):
         """Test deleting non-existent script."""
         headers = {"Authorization": f"Bearer {test_admin_token}"}
-        response = await test_client.delete("/api/scripts/admin/scripts/nonexistent_xyz", headers=headers)
+        response = await test_client.delete(
+            "/api/scripts/admin/scripts/nonexistent_xyz", headers=headers
+        )
         assert response.status_code == 404

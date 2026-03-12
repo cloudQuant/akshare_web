@@ -1,6 +1,16 @@
-import axios, { type AxiosInstance, type AxiosError, type InternalAxiosRequestConfig } from 'axios'
+import axios, {
+  type AxiosInstance,
+  type AxiosError,
+  type InternalAxiosRequestConfig,
+} from 'axios'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
+
+/** API error response shape */
+interface ApiErrorData {
+  message?: string
+  detail?: string
+}
 
 // Create axios instance
 const request: AxiosInstance = axios.create({
@@ -82,7 +92,7 @@ request.interceptors.response.use(
                 error.config.headers.Authorization = `Bearer ${newToken}`
                 return request(error.config)
               }
-            } catch (refreshError) {
+            } catch {
               refreshSubscribers = []
               authStore.logout()
               window.location.href = '/login'
@@ -107,8 +117,10 @@ request.interceptors.response.use(
         case 500:
           ElMessage.error('服务器错误，请稍后再试')
           break
-        default:
-          ElMessage.error((error.response.data as any)?.message || '请求失败')
+        default: {
+          const data = error.response?.data as ApiErrorData | undefined
+          ElMessage.error(data?.message ?? data?.detail ?? '请求失败')
+        }
       }
     } else if (error.request) {
       ElMessage.error('网络错误，请检查网络连接')

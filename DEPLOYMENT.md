@@ -37,7 +37,11 @@
 - **内存**: 8+ GB RAM
 - **磁盘**: SSD 50+ GB
 - **MySQL**: 独立服务器
-- **Redis**: 用于缓存 (可选)
+- **Redis**: 用于缓存和调度器 Job 存储（**多 Worker 部署时必须配置**）
+
+### 多 Worker 与 Redis 说明
+
+当使用 `WORKERS > 1`（如 `uvicorn --workers 4`）时，APScheduler 需要共享的 Job 存储才能避免定时任务在多进程间重复执行。**必须**配置 `REDIS_URL`，否则调度器将被自动禁用。单 Worker 部署可省略 Redis。
 
 ---
 
@@ -114,9 +118,11 @@ ENVIRONMENT=production
 SECRET_KEY=<生成一个强随机密钥>
 ALLOWED_HOSTS=localhost, your-domain.com
 
-# 数据库配置
-DATABASE_URL=mysql+aiomysql://user:password@localhost:3306/akshare_web
-WAREHOUSE_DB_URL=mysql+aiomysql://user:password@localhost:3307/akshare_warehouse
+# 数据库配置（使用 MYSQL_* 和 DATA_MYSQL_* 环境变量）
+MYSQL_HOST=localhost
+MYSQL_DATABASE=akshare_web
+DATA_MYSQL_HOST=localhost
+DATA_MYSQL_DATABASE=akshare_data
 
 # JWT 配置
 ACCESS_TOKEN_EXPIRE_MINUTES=60
@@ -316,10 +322,9 @@ CREATE USER 'akshare_user'@'localhost' IDENTIFIED BY 'strong_password';
 GRANT ALL PRIVILEGES ON akshare_web.* TO 'akshare_user'@'localhost';
 FLUSH PRIVILEGES;
 
--- 创建数据仓库（可选）
-CREATE DATABASE akshare_warehouse CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'warehouse_user'@'localhost' IDENTIFIED BY 'strong_password';
-GRANT ALL PRIVILEGES ON akshare_warehouse.* TO 'warehouse_user'@'localhost';
+-- 创建数据仓库（可与主库同机，默认名 akshare_data）
+CREATE DATABASE akshare_data CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+GRANT ALL PRIVILEGES ON akshare_data.* TO 'akshare_user'@'localhost';
 FLUSH PRIVILEGES;
 ```
 
@@ -554,6 +559,16 @@ curl http://localhost:8000/health
 ---
 
 ## 安全加固
+
+### 0. 生产环境安全检查清单（必读）
+
+部署前请逐项确认：
+
+- [ ] **SECRET_KEY**：使用 `python -c "import secrets; print(secrets.token_urlsafe(32))"` 生成，切勿使用示例值
+- [ ] **默认管理员密码**：首次登录后立即修改 `admin` 账号密码，或通过 `ADMIN_DEFAULT_PASSWORD` 环境变量在启动前设置
+- [ ] **数据库权限**：生产环境将 `akshare_user@'%'` 改为 `akshare_user@'localhost'` 或限定 IP，避免开放远程 root
+- [ ] **多 Worker 部署**：当 `WORKERS > 1` 时必须配置 `REDIS_URL`，否则定时任务调度器将被禁用
+- [ ] **依赖审计**：定期执行 `pip audit` 和 `npm audit`，及时修复已知漏洞
 
 ### 1. 防火墙配置
 

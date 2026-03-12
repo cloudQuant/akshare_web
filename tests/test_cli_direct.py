@@ -2,8 +2,8 @@
 Direct tests for CLI commands to maximize coverage.
 """
 
-import pytest
-from unittest.mock import patch, AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
+
 from click.testing import CliRunner
 
 from app.cli import cli
@@ -30,7 +30,9 @@ class TestExportConfig:
         result = runner.invoke(cli, ["export-config", "--output", outfile])
         assert result.exit_code == 0
         import json
-        with open(outfile) as f:
+        from pathlib import Path
+
+        with Path(outfile).open() as f:
             data = json.load(f)
         assert "app_name" in data
 
@@ -38,13 +40,17 @@ class TestExportConfig:
 class TestCheckHealth:
     def test_healthy(self):
         runner = CliRunner()
-        with patch("app.core.database.check_db_connection", new_callable=AsyncMock, return_value=True):
+        with patch(
+            "app.core.database.check_db_connection", new_callable=AsyncMock, return_value=True
+        ):
             result = runner.invoke(cli, ["check-health"])
         assert "healthy" in result.output
 
     def test_unhealthy(self):
         runner = CliRunner()
-        with patch("app.core.database.check_db_connection", new_callable=AsyncMock, return_value=False):
+        with patch(
+            "app.core.database.check_db_connection", new_callable=AsyncMock, return_value=False
+        ):
             result = runner.invoke(cli, ["check-health"])
         assert result.exit_code == 1
         assert "unhealthy" in result.output
@@ -53,8 +59,10 @@ class TestCheckHealth:
 class TestInitDbCmd:
     def test_init(self):
         runner = CliRunner()
-        with patch("app.core.database.create_tables", new_callable=AsyncMock), \
-             patch("app.core.database.init_db", new_callable=AsyncMock):
+        with (
+            patch("app.core.database.create_tables", new_callable=AsyncMock),
+            patch("app.core.database.init_db", new_callable=AsyncMock),
+        ):
             result = runner.invoke(cli, ["init-db"])
         assert result.exit_code == 0
 

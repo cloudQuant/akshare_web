@@ -3,13 +3,13 @@ Tests for DataAcquisitionService covering execute_download, _store_data,
 _create_table_if_not_exists, _insert_data, _update_table_metadata.
 """
 
-import pytest
-import pandas as pd
 from unittest.mock import AsyncMock, MagicMock, patch
-from datetime import datetime, UTC
 
-from app.services.data_acquisition import DataAcquisitionService
+import pandas as pd
+import pytest
+
 from app.models.task import TaskStatus
+from app.services.data_acquisition import DataAcquisitionService
 
 
 @pytest.fixture
@@ -58,7 +58,9 @@ class TestExecuteDownload:
         results[1].scalar_one_or_none.return_value = mock_execution
         mock_db.execute.side_effect = results
 
-        with patch.object(svc, '_call_akshare_function', new_callable=AsyncMock, return_value=pd.DataFrame()):
+        with patch.object(
+            svc, "_call_akshare_function", new_callable=AsyncMock, return_value=pd.DataFrame()
+        ):
             result = await svc.execute_download(1, 1, {}, mock_db)
 
         assert result == 0
@@ -81,8 +83,10 @@ class TestExecuteDownload:
 
         df = pd.DataFrame({"col": [1, 2, 3]})
 
-        with patch.object(svc, '_call_akshare_function', new_callable=AsyncMock, return_value=df), \
-             patch.object(svc, '_store_data', new_callable=AsyncMock, return_value=3):
+        with (
+            patch.object(svc, "_call_akshare_function", new_callable=AsyncMock, return_value=df),
+            patch.object(svc, "_store_data", new_callable=AsyncMock, return_value=3),
+        ):
             result = await svc.execute_download(1, 1, {}, mock_db)
 
         assert result == 3
@@ -103,9 +107,16 @@ class TestExecuteDownload:
         results[1].scalar_one_or_none.return_value = mock_execution
         mock_db.execute.side_effect = results
 
-        with patch.object(svc, '_call_akshare_function', new_callable=AsyncMock, side_effect=RuntimeError("fail")):
-            with pytest.raises(RuntimeError):
-                await svc.execute_download(1, 1, {}, mock_db)
+        with (
+            patch.object(
+                svc,
+                "_call_akshare_function",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("fail"),
+            ),
+            pytest.raises(RuntimeError),
+        ):
+            await svc.execute_download(1, 1, {}, mock_db)
 
         assert mock_execution.status == TaskStatus.FAILED
 
@@ -118,7 +129,7 @@ class TestCallAkshareFunction:
 
         with patch("app.services.data_acquisition.ak") as mock_ak:
             mock_ak.nonexistent_function_xyz = None
-            delattr(mock_ak, 'nonexistent_function_xyz')
+            delattr(mock_ak, "nonexistent_function_xyz")
             with pytest.raises(AttributeError):
                 await svc._call_akshare_function(mock_interface, {})
 
@@ -155,9 +166,11 @@ class TestStoreData:
         mock_interface.id = 1
         df = pd.DataFrame({"col_a": [1, 2]})
 
-        with patch.object(svc, '_create_table_if_not_exists', new_callable=AsyncMock), \
-             patch.object(svc, '_insert_data', new_callable=AsyncMock, return_value=2), \
-             patch.object(svc, '_update_table_metadata', new_callable=AsyncMock):
+        with (
+            patch.object(svc, "_create_table_if_not_exists", new_callable=AsyncMock),
+            patch.object(svc, "_insert_data", new_callable=AsyncMock, return_value=2),
+            patch.object(svc, "_update_table_metadata", new_callable=AsyncMock),
+        ):
             result = await svc._store_data(df, mock_interface, 1, mock_db)
 
         assert result == 2

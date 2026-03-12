@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { usersApi } from '@/api/users'
 import { useAuthStore } from '@/stores/auth'
+import { getApiErrorMessage } from '@/utils/error'
 import type { User } from '@/types'
 
 const router = useRouter()
@@ -31,10 +32,10 @@ async function loadUsers() {
       page: currentPage.value,
       page_size: pageSize.value,
     })
-    users.value = (data as any).items || []
-    total.value = (data as any).total || 0
+    users.value = data.items ?? []
+    total.value = data.total ?? 0
   } catch (error) {
-    console.error('Failed to load users:', error)
+    ElMessage.error(getApiErrorMessage(error))
   } finally {
     loading.value = false
   }
@@ -49,13 +50,13 @@ async function handleUpdateRole(user: User) {
       inputErrorMessage: '请输入 admin 或 user',
       inputValue: user.role,
     })
-
-    await usersApi.updateRole(user.id, (result as any).value)
+    const role = (result as { value: string }).value as 'admin' | 'user'
+    await usersApi.updateRole(user.id, role)
     ElMessage.success('角色更新成功')
     loadUsers()
   } catch (error) {
     if (error !== 'cancel') {
-      console.error('Failed to update role:', error)
+      ElMessage.error(getApiErrorMessage(error))
     }
   }
 }
@@ -68,9 +69,9 @@ async function handleDelete(user: User) {
     await usersApi.delete(user.id)
     ElMessage.success('删除成功')
     loadUsers()
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error !== 'cancel') {
-      console.error('Failed to delete user:', error)
+      ElMessage.error(getApiErrorMessage(error))
     }
   }
 }
@@ -99,11 +100,17 @@ onMounted(() => {
         </div>
       </template>
 
-      <div v-if="!isAdmin" class="no-permission">
+      <div
+        v-if="!isAdmin"
+        class="no-permission"
+      >
         <el-empty description="您没有权限访问此页面" />
       </div>
 
-      <div v-else class="content">
+      <div
+        v-else
+        class="content"
+      >
         <div class="search-bar">
           <el-input
             v-model="searchKeyword"
@@ -123,21 +130,43 @@ onMounted(() => {
           style="width: 100%"
           stripe
         >
-          <el-table-column prop="id" label="ID" width="80" />
-          <el-table-column prop="email" label="邮箱" min-width="200" />
-          <el-table-column label="角色" width="120">
+          <el-table-column
+            prop="id"
+            label="ID"
+            width="80"
+          />
+          <el-table-column
+            prop="email"
+            label="邮箱"
+            min-width="200"
+          />
+          <el-table-column
+            label="角色"
+            width="120"
+          >
             <template #default="{ row }">
-              <el-tag :type="row.role === 'admin' ? 'danger' : 'primary'" size="small">
+              <el-tag
+                :type="row.role === 'admin' ? 'danger' : 'primary'"
+                size="small"
+              >
                 {{ row.role }}
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="created_at" label="创建时间" width="180">
+          <el-table-column
+            prop="created_at"
+            label="创建时间"
+            width="180"
+          >
             <template #default="{ row }">
               {{ new Date(row.created_at).toLocaleString() }}
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="150" fixed="right">
+          <el-table-column
+            label="操作"
+            width="150"
+            fixed="right"
+          >
             <template #default="{ row }">
               <el-button
                 type="primary"

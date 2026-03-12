@@ -2,11 +2,16 @@
 Direct tests for SchedulerService to maximize coverage.
 """
 
-import pytest
 from datetime import datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-from app.services.scheduler_service import SchedulerService, init_scheduler_service, get_scheduler_service
+import pytest
+
+from app.services.scheduler_service import (
+    SchedulerService,
+    get_scheduler_service,
+    init_scheduler_service,
+)
 
 
 class TestSchedulerServiceInit:
@@ -102,8 +107,10 @@ class TestAddRemoveJob:
         svc = SchedulerService()
         await svc.start()
         result = await svc.add_job(
-            job_id="test_j1", func=lambda: None,
-            trigger_type="cron", trigger_args={"cron_expression": "0 8 * * *"},
+            job_id="test_j1",
+            func=lambda: None,
+            trigger_type="cron",
+            trigger_args={"cron_expression": "0 8 * * *"},
             job_name="Test Job",
         )
         assert result["job_id"] == "test_j1"

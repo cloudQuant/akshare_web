@@ -1,5 +1,5 @@
 // API Response wrapper
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   success: boolean
   message: string
   data: T
@@ -59,7 +59,7 @@ export interface DataScript {
   target_table: string | null
   module_path: string | null
   function_name: string | null
-  parameters?: Parameter[] | Record<string, any> | null
+  parameters?: Parameter[] | Record<string, unknown> | null
   estimated_duration: number
   timeout: number
   is_active: boolean
@@ -72,7 +72,7 @@ export interface Parameter {
   name: string
   type: string
   required: boolean
-  default_value?: any
+  default_value?: string | number | boolean | null
   description: string
 }
 
@@ -86,7 +86,7 @@ export interface Task {
   script_name: string | null
   schedule_type: string
   schedule_expression: string
-  parameters: Record<string, any>
+  parameters: Record<string, unknown>
   is_active: boolean
   retry_on_failure: boolean
   max_retries: number
@@ -107,12 +107,12 @@ export interface Execution {
   execution_id: string
   task_id: number | null
   script_id: string
-  params: Record<string, any> | null
+  params: Record<string, unknown> | null
   status: TaskStatusType
   start_time: string | null
   end_time: string | null
   duration: number | null
-  result: Record<string, any> | null
+  result: Record<string, unknown> | null
   error_message: string | null
   error_trace: string | null
   rows_before: number | null
@@ -151,6 +151,26 @@ export interface TableSchema {
   columns: TableColumn[]
   row_count: number
   last_update_time: string | null
+}
+
+export interface TableDataResponse {
+  table_name: string
+  columns: string[]
+  rows: Record<string, unknown>[]
+  row_count: number
+}
+
+export interface DatabaseConfigResponse {
+  host: string
+  port: number
+  database: string
+  user: string
+  is_warehouse?: boolean
+}
+
+export interface TestConnectionResponse {
+  success: boolean
+  message: string
 }
 
 // Stats

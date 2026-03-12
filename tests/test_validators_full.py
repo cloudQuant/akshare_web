@@ -4,14 +4,13 @@ Comprehensive tests for validators utility module.
 Covers email, schedule, username, password, search, JSON parameter validation.
 """
 
-import pytest
 from app.utils.validators import (
+    sanitize_search_term,
     validate_email,
+    validate_json_parameters,
+    validate_password,
     validate_schedule_expression,
     validate_username,
-    validate_password,
-    sanitize_search_term,
-    validate_json_parameters,
 )
 
 
@@ -126,6 +125,14 @@ class TestValidatePassword:
 
     def test_short_password(self):
         valid, msg = validate_password("12345")
+        assert valid is False
+
+    def test_password_without_letter(self):
+        valid, msg = validate_password("12345678")
+        assert valid is False
+
+    def test_password_without_digit(self):
+        valid, msg = validate_password("abcdefgh")
         assert valid is False
 
     def test_long_password(self):

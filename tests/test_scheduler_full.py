@@ -4,8 +4,9 @@ Comprehensive tests for scheduler service.
 Covers TaskScheduler start, shutdown, is_running, task management.
 """
 
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.services.scheduler import TaskScheduler
 
@@ -70,6 +71,7 @@ class TestTaskSchedulerGetTriggerConfig:
     def test_get_trigger_config_cron(self):
         """Test getting cron trigger config."""
         from app.models.task import ScheduleType
+
         scheduler = TaskScheduler()
         task = MagicMock()
         task.schedule_type = ScheduleType.CRON
@@ -82,6 +84,7 @@ class TestTaskSchedulerGetTriggerConfig:
     def test_get_trigger_config_daily(self):
         """Test getting daily trigger config."""
         from app.models.task import ScheduleType
+
         scheduler = TaskScheduler()
         task = MagicMock()
         task.schedule_type = ScheduleType.DAILY
@@ -93,6 +96,7 @@ class TestTaskSchedulerGetTriggerConfig:
     def test_get_trigger_config_weekly(self):
         """Test getting weekly trigger config."""
         from app.models.task import ScheduleType
+
         scheduler = TaskScheduler()
         task = MagicMock()
         task.schedule_type = ScheduleType.WEEKLY
@@ -104,6 +108,7 @@ class TestTaskSchedulerGetTriggerConfig:
     def test_get_trigger_config_monthly(self):
         """Test getting monthly trigger config."""
         from app.models.task import ScheduleType
+
         scheduler = TaskScheduler()
         task = MagicMock()
         task.schedule_type = ScheduleType.MONTHLY
@@ -115,6 +120,7 @@ class TestTaskSchedulerGetTriggerConfig:
     def test_get_trigger_config_interval(self):
         """Test getting interval trigger config."""
         from app.models.task import ScheduleType
+
         scheduler = TaskScheduler()
         task = MagicMock()
         task.schedule_type = ScheduleType.INTERVAL

@@ -15,10 +15,10 @@ import time
 
 from loguru import logger
 
-
 # ---------------------------------------------------------------------------
 # Abstract base
 # ---------------------------------------------------------------------------
+
 
 class _TokenBlacklistBackend(abc.ABC):
     """Common interface for token blacklist backends."""
@@ -43,12 +43,13 @@ class _TokenBlacklistBackend(abc.ABC):
 # In-memory backend (original implementation)
 # ---------------------------------------------------------------------------
 
+
 class _InMemoryBlacklist(_TokenBlacklistBackend):
     """Thread-safe in-memory token blacklist with TTL-based auto-cleanup."""
 
     _CLEANUP_INTERVAL = 300  # 5 minutes
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._blacklist: dict[str, float] = {}  # token_hash -> expiry ts
         self._lock = threading.Lock()
         self._cleanup_timer: threading.Timer | None = None
@@ -116,13 +117,15 @@ class _InMemoryBlacklist(_TokenBlacklistBackend):
 # Redis backend
 # ---------------------------------------------------------------------------
 
+
 class _RedisBlacklist(_TokenBlacklistBackend):
     """Redis-backed token blacklist.  Uses SET + TTL for auto-expiry."""
 
     _KEY_PREFIX = "tkbl:"  # token-blacklist namespace
 
-    def __init__(self, redis_url: str):
+    def __init__(self, redis_url: str) -> None:
         import redis
+
         self._redis = redis.from_url(redis_url, decode_responses=True)
         # Verify connectivity
         self._redis.ping()
@@ -142,7 +145,7 @@ class _RedisBlacklist(_TokenBlacklistBackend):
         self._redis.setex(self._key(token), ttl, "1")
 
     def is_revoked(self, token: str) -> bool:
-        return self._redis.exists(self._key(token)) > 0
+        return bool(self._redis.exists(self._key(token)) > 0)
 
     def cleanup(self) -> int:
         # Redis handles expiry automatically via TTL; nothing to do.
@@ -153,20 +156,23 @@ class _RedisBlacklist(_TokenBlacklistBackend):
         cursor, keys = self._redis.scan(match=f"{self._KEY_PREFIX}*", count=1000)
         count = len(keys)
         while cursor:
-            cursor, batch = self._redis.scan(cursor=cursor, match=f"{self._KEY_PREFIX}*", count=1000)
+            cursor, batch = self._redis.scan(
+                cursor=cursor, match=f"{self._KEY_PREFIX}*", count=1000
+            )
             count += len(batch)
         return count
 
     def stop(self) -> None:
         try:
             self._redis.close()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Redis close failed (may already be closed): %s", e)
 
 
 # ---------------------------------------------------------------------------
-# Factory – pick the best available backend
+# Factory - pick the best available backend
 # ---------------------------------------------------------------------------
+
 
 def _create_blacklist() -> _TokenBlacklistBackend:
     """Create the best available token blacklist backend."""

@@ -6,28 +6,43 @@ middleware, and startup/shutdown events.
 """
 
 import os
+import sys
+import traceback
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import AsyncGenerator
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
+from starlette.middleware.base import RequestResponseEndpoint
 
 from app.api import api_router
+from app.api.rate_limit import get_limiter
 from app.core.config import settings
-from app.core.database import init_db, close_db
+from app.core.database import close_db, init_db
 from app.services.scheduler import task_scheduler
+from app.utils.constants import DEFAULT_SECRET_KEY
+
+
+def _get_pool_stats(pool: object) -> dict[str, object]:
+    """Extract connection pool stats; SQLAlchemy Pool type stubs are incomplete."""
+    return {
+        "size": getattr(pool, "size", lambda: 0)(),
+        "checked_in": getattr(pool, "checkedin", lambda: 0)(),
+        "checked_out": getattr(pool, "checkedout", lambda: 0)(),
+        "overflow": getattr(pool, "overflow", lambda: 0)(),
+        "invalid": getattr(pool, "status", lambda: "")(),
+    }
 
 
 # Check if we're in testing mode
 TESTING = os.getenv("TESTING", "false").lower() == "true"
 
 # Configure loguru logging (file rotation + level from settings)
-import sys
 logger.remove()  # Remove default stderr handler
 
 _LOG_FORMAT_PRETTY = (
@@ -56,6 +71,7 @@ if not TESTING:
 if settings.sentry_dsn and not TESTING:
     try:
         import sentry_sdk
+
         sentry_sdk.init(
             dsn=settings.sentry_dsn,
             traces_sample_rate=settings.sentry_traces_sample_rate,
@@ -67,7 +83,7 @@ if settings.sentry_dsn and not TESTING:
         logger.warning("SENTRY_DSN configured but sentry-sdk not installed. pip install sentry-sdk")
 
 # Initialize rate limiter (only in production)
-from app.api.rate_limit import get_limiter
+
 limiter = get_limiter()
 
 
@@ -83,7 +99,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info(f"Environment: {settings.app_env}")
 
     # Security warning
-    if settings.secret_key == "change-this-secret-key":
+    if settings.secret_key == DEFAULT_SECRET_KEY:
         logger.warning("⚠️  USING DEFAULT SECRET KEY! Change this in production!")
 
     # Initialize database
@@ -93,9 +109,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # Check for pending migrations
         try:
             from alembic.config import Config as AlembicConfig
-            from alembic.script import ScriptDirectory
             from alembic.runtime.migration import MigrationContext
-            from sqlalchemy import create_engine, inspect
+            from alembic.script import ScriptDirectory
+            from sqlalchemy import create_engine
 
             sync_engine = create_engine(settings.database_url_sync)
             with sync_engine.connect() as conn:
@@ -119,6 +135,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             logger.debug(f"Could not check alembic migration status: {e}")
     else:
         from app.core.database import create_tables
+
         await create_tables()
 
     await init_db()
@@ -143,6 +160,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # Shutdown the akshare thread pool executor
     from app.services.data_acquisition import DataAcquisitionService
+
     DataAcquisitionService._akshare_executor.shutdown(wait=False)
 
     await close_db()
@@ -194,6 +212,7 @@ app.add_middleware(
 # Request logging middleware (skip in testing to reduce noise)
 if not TESTING:
     from app.middleware.request_logging import RequestLoggingMiddleware
+
     app.add_middleware(RequestLoggingMiddleware)
 
 # Rate limit exception handler (only in production)
@@ -201,7 +220,7 @@ if not TESTING:
     from slowapi.errors import RateLimitExceeded
 
     @app.exception_handler(RateLimitExceeded)
-    async def rate_limit_handler(request, exc):
+    async def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
         """Handle rate limit exceeded exceptions."""
         return JSONResponse(
             status_code=429,
@@ -211,7 +230,7 @@ if not TESTING:
 
 # Global exception handlers for structured error responses
 @app.exception_handler(ValueError)
-async def value_error_handler(request: Request, exc: ValueError):
+async def value_error_handler(request: Request, exc: ValueError) -> JSONResponse:
     """Handle ValueError with structured response."""
     logger.warning(f"ValueError: {exc}")
     return JSONResponse(
@@ -221,9 +240,14 @@ async def value_error_handler(request: Request, exc: ValueError):
 
 
 @app.exception_handler(Exception)
-async def generic_exception_handler(request: Request, exc: Exception):
+async def generic_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """Handle uncaught exceptions with structured response."""
-    logger.error(f"Unhandled exception: {type(exc).__name__}: {exc}")
+    logger.error(
+        "Unhandled exception: {}: {}\n{}",
+        type(exc).__name__,
+        exc,
+        traceback.format_exc(),
+    )
     return JSONResponse(
         status_code=500,
         content={
@@ -240,7 +264,9 @@ app.include_router(api_router, prefix="/api")
 
 
 @app.middleware("http")
-async def deprecation_header_middleware(request: Request, call_next):
+async def deprecation_header_middleware(
+    request: Request, call_next: RequestResponseEndpoint
+) -> Response:
     """Add deprecation header for requests using /api/ without version prefix."""
     response = await call_next(request)
     path = request.url.path
@@ -252,13 +278,13 @@ async def deprecation_header_middleware(request: Request, call_next):
 
 
 @app.get("/health")
-async def health_check():
+async def health_check() -> dict:
     """
     Health check endpoint.
 
     Returns application health status.
     """
-    from app.core.database import check_db_connection, engine, data_engine
+    from app.core.database import check_db_connection, data_engine, engine
 
     db_healthy = await check_db_connection()
     scheduler_running = task_scheduler.is_running
@@ -272,16 +298,9 @@ async def health_check():
         overall_status = "unhealthy"
 
     # Connection pool stats (helps detect pool exhaustion)
-    pool_status = {}
+    pool_status: dict[str, dict[str, object]] = {}
     for label, eng in [("main", engine), ("data", data_engine)]:
-        pool = eng.pool
-        pool_status[label] = {
-            "size": pool.size(),
-            "checked_in": pool.checkedin(),
-            "checked_out": pool.checkedout(),
-            "overflow": pool.overflow(),
-            "invalid": pool.status(),
-        }
+        pool_status[label] = _get_pool_stats(eng.pool)
 
     return {
         "status": overall_status,
@@ -305,12 +324,12 @@ if FRONTEND_DIR.is_dir():
     app.mount("/assets", StaticFiles(directory=FRONTEND_DIR / "assets"), name="static-assets")
 
     @app.get("/")
-    async def serve_index():
+    async def serve_index() -> FileResponse:
         """Serve Vue SPA index page."""
         return FileResponse(FRONTEND_DIR / "index.html")
 
     @app.exception_handler(404)
-    async def spa_not_found(request: Request, exc):
+    async def spa_not_found(request: Request, exc: Exception) -> Response:
         """Serve index.html for SPA client-side routing on 404."""
         # Only serve SPA for non-API paths
         path = request.url.path
@@ -322,8 +341,9 @@ if FRONTEND_DIR.is_dir():
             return FileResponse(file_path)
         return FileResponse(FRONTEND_DIR / "index.html")
 else:
+
     @app.get("/")
-    async def root():
+    async def root() -> dict:
         """Root endpoint with basic information."""
         return {
             "app_name": settings.app_name,

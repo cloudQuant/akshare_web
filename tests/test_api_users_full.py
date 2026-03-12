@@ -26,14 +26,18 @@ class TestListUsers:
         assert response.status_code == 403
 
     @pytest.mark.asyncio
-    async def test_list_users_with_role_filter(self, test_client: AsyncClient, test_admin_token: str):
+    async def test_list_users_with_role_filter(
+        self, test_client: AsyncClient, test_admin_token: str
+    ):
         """Test listing users with role filter."""
         headers = {"Authorization": f"Bearer {test_admin_token}"}
         response = await test_client.get("/api/users/?role=admin", headers=headers)
         assert response.status_code == 200
 
     @pytest.mark.asyncio
-    async def test_list_users_with_active_filter(self, test_client: AsyncClient, test_admin_token: str):
+    async def test_list_users_with_active_filter(
+        self, test_client: AsyncClient, test_admin_token: str
+    ):
         """Test listing users with active filter."""
         headers = {"Authorization": f"Bearer {test_admin_token}"}
         response = await test_client.get("/api/users/?is_active=true", headers=headers)
@@ -58,10 +62,13 @@ class TestGetUser:
     """Test get user endpoint."""
 
     @pytest.mark.asyncio
-    async def test_get_user_as_admin(self, test_client: AsyncClient, test_admin_token: str, test_db):
+    async def test_get_user_as_admin(
+        self, test_client: AsyncClient, test_admin_token: str, test_db
+    ):
         """Test getting user details as admin."""
-        from app.models.user import User
         from sqlalchemy import select
+
+        from app.models.user import User
 
         result = await test_db.execute(select(User).limit(1))
         user = result.scalar_one_or_none()
@@ -84,8 +91,8 @@ class TestUpdateUser:
     @pytest.mark.asyncio
     async def test_update_user_role(self, test_client: AsyncClient, test_admin_token: str, test_db):
         """Test updating user role."""
-        from app.models.user import User, UserRole
         from app.core.security import hash_password
+        from app.models.user import User, UserRole
 
         user = User(
             username="updatetest",
@@ -118,10 +125,12 @@ class TestUpdateUser:
         assert response.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_update_user_duplicate_email(self, test_client: AsyncClient, test_admin_token: str, test_db):
+    async def test_update_user_duplicate_email(
+        self, test_client: AsyncClient, test_admin_token: str, test_db
+    ):
         """Test updating user with duplicate email."""
-        from app.models.user import User, UserRole
         from app.core.security import hash_password
+        from app.models.user import User, UserRole
 
         user1 = User(
             username="emailtest1",
@@ -156,8 +165,8 @@ class TestDeleteUser:
     @pytest.mark.asyncio
     async def test_delete_user(self, test_client: AsyncClient, test_admin_token: str, test_db):
         """Test deleting a user."""
-        from app.models.user import User, UserRole
         from app.core.security import hash_password
+        from app.models.user import User, UserRole
 
         user = User(
             username="deletetest",
@@ -175,15 +184,16 @@ class TestDeleteUser:
         assert response.status_code == 200
 
     @pytest.mark.asyncio
-    async def test_delete_last_admin(self, test_client: AsyncClient, test_admin_token: str, test_db):
+    async def test_delete_last_admin(
+        self, test_client: AsyncClient, test_admin_token: str, test_db
+    ):
         """Test deleting the last admin user (should fail)."""
-        from app.models.user import User, UserRole
         from sqlalchemy import select
 
+        from app.models.user import User, UserRole
+
         # Find the admin user
-        result = await test_db.execute(
-            select(User).where(User.role == UserRole.ADMIN)
-        )
+        result = await test_db.execute(select(User).where(User.role == UserRole.ADMIN))
         admin = result.scalars().first()
 
         if admin:
@@ -205,8 +215,8 @@ class TestResetPassword:
     @pytest.mark.asyncio
     async def test_reset_password(self, test_client: AsyncClient, test_admin_token: str, test_db):
         """Test resetting user password."""
-        from app.models.user import User, UserRole
         from app.core.security import hash_password
+        from app.models.user import User, UserRole
 
         user = User(
             username="resetpw",
@@ -228,7 +238,9 @@ class TestResetPassword:
         assert response.status_code == 200
 
     @pytest.mark.asyncio
-    async def test_reset_password_nonexistent(self, test_client: AsyncClient, test_admin_token: str):
+    async def test_reset_password_nonexistent(
+        self, test_client: AsyncClient, test_admin_token: str
+    ):
         """Test resetting password for non-existent user."""
         headers = {"Authorization": f"Bearer {test_admin_token}"}
         response = await test_client.post(

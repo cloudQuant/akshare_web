@@ -12,30 +12,43 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import CurrentUser, get_db
+from app.api.rate_limit import rate_limit
 from app.api.schemas import (
     APIResponse,
+    ErrorResponse,
     LoginRequest,
-    RegisterRequest,
     RefreshTokenRequest,
+    RegisterRequest,
 )
-from app.api.rate_limit import rate_limit
 from app.core.security import (
-    verify_password,
-    hash_password,
     create_access_token,
     create_refresh_token,
+    decode_token,
+    hash_password,
+    verify_password,
+    verify_token,
 )
+from app.core.token_blacklist import token_blacklist
 from app.models.user import User, UserRole
+from app.utils.constants import MAX_USERNAME_GENERATION_ATTEMPTS
 
 router = APIRouter()
 
 
-@router.post("/register", response_model=APIResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/register",
+    response_model=APIResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        400: {"model": ErrorResponse, "description": "Bad Request (email exists, validation)"},
+        429: {"model": ErrorResponse, "description": "Rate limit exceeded"},
+    },
+)
 @rate_limit("5/minute")  # Limit registration attempts
 async def register(
     request: RegisterRequest,
     db: AsyncSession = Depends(get_db),
-):
+) -> APIResponse:
     """
     Register a new user account.
 
@@ -43,13 +56,6 @@ async def register(
     """
     # Normalize email to lowercase
     email = request.email.lower()
-
-    # Validate password confirmation
-    if request.password != request.password_confirm:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Passwords do not match",
-        )
 
     # Check if email already exists
     result = await db.execute(select(User).where(User.email == email))
@@ -62,18 +68,16 @@ async def register(
     # Generate username from email (part before @)
     base_username = email.split("@")[0][:46]  # Max length 50, leave room for counter
     username = base_username
-    # Ensure username is unique by appending number if needed
     counter = 1
-    max_attempts = 1000  # Prevent infinite loop
 
-    while counter <= max_attempts:
+    while counter <= MAX_USERNAME_GENERATION_ATTEMPTS:
         result = await db.execute(select(User).where(User.username == username))
         if result.scalar_one_or_none() is None:
             break
         username = f"{base_username}{counter}"
         counter += 1
 
-    if counter > max_attempts:
+    if counter > MAX_USERNAME_GENERATION_ATTEMPTS:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Unable to generate unique username. Please contact support.",
@@ -108,12 +112,20 @@ async def register(
     )
 
 
-@router.post("/login", response_model=APIResponse)
+@router.post(
+    "/login",
+    response_model=APIResponse,
+    responses={
+        401: {"model": ErrorResponse, "description": "Invalid credentials"},
+        403: {"model": ErrorResponse, "description": "Account disabled"},
+        429: {"model": ErrorResponse, "description": "Rate limit exceeded"},
+    },
+)
 @rate_limit("10/minute")  # Limit login attempts
 async def login(
     request: LoginRequest,
     db: AsyncSession = Depends(get_db),
-):
+) -> APIResponse:
     """
     Authenticate user and return access token.
 
@@ -166,18 +178,20 @@ async def login(
     )
 
 
-@router.post("/refresh", response_model=APIResponse)
+@router.post(
+    "/refresh",
+    response_model=APIResponse,
+    responses={401: {"model": ErrorResponse, "description": "Invalid or expired refresh token"}},
+)
 async def refresh_token(
     request: RefreshTokenRequest,
     db: AsyncSession = Depends(get_db),
-):
+) -> APIResponse:
     """
     Refresh access token using refresh token.
 
     Validates refresh token and returns new access token.
     """
-    from app.core.security import verify_token
-
     payload = verify_token(request.refresh_token, token_type="refresh")
 
     if payload is None:
@@ -187,6 +201,11 @@ async def refresh_token(
         )
 
     user_id = payload.get("sub")
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token",
+        )
     result = await db.execute(select(User).where(User.id == int(user_id)))
     user = result.scalar_one_or_none()
 
@@ -210,19 +229,20 @@ async def refresh_token(
     )
 
 
-@router.post("/logout", response_model=APIResponse)
+@router.post(
+    "/logout",
+    response_model=APIResponse,
+    responses={401: {"model": ErrorResponse, "description": "Not authenticated"}},
+)
 async def logout(
     current_user: CurrentUser,
     credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
-):
+) -> APIResponse:
     """
     Logout current user.
 
     Revokes the current access token so it cannot be reused.
     """
-    from app.core.token_blacklist import token_blacklist
-    from app.core.security import decode_token
-
     token = credentials.credentials
     payload = decode_token(token)
     # Use token expiry for blacklist auto-cleanup
@@ -235,10 +255,14 @@ async def logout(
     )
 
 
-@router.get("/me", response_model=APIResponse)
+@router.get(
+    "/me",
+    response_model=APIResponse,
+    responses={401: {"model": ErrorResponse, "description": "Not authenticated"}},
+)
 async def get_current_user_info(
     current_user: CurrentUser,
-):
+) -> APIResponse:
     """
     Get current user information.
 

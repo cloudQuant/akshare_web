@@ -10,7 +10,7 @@ import json
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, Query
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from loguru import logger
 
 router = APIRouter()
@@ -20,10 +20,11 @@ router = APIRouter()
 # Connection manager (pub/sub hub)
 # ---------------------------------------------------------------------------
 
+
 class ConnectionManager:
     """Manages active WebSocket connections and broadcasts events."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._connections: list[WebSocket] = []
         self._lock = asyncio.Lock()
 
@@ -50,7 +51,8 @@ class ConnectionManager:
             for ws in self._connections:
                 try:
                     await ws.send_text(payload)
-                except Exception:
+                except Exception as e:
+                    logger.debug(f"WebSocket send failed (stale connection): {e}")
                     stale.append(ws)
 
             # Clean up broken connections
@@ -70,6 +72,7 @@ ws_manager = ConnectionManager()
 # Helper to broadcast from anywhere in the codebase
 # ---------------------------------------------------------------------------
 
+
 async def broadcast_execution_update(
     execution_id: str,
     task_id: int | None,
@@ -84,24 +87,27 @@ async def broadcast_execution_update(
 
     Call this from scheduler / execution_service whenever status changes.
     """
-    await ws_manager.broadcast({
-        "type": "execution_update",
-        "data": {
-            "execution_id": execution_id,
-            "task_id": task_id,
-            "status": status,
-            "rows_before": rows_before,
-            "rows_after": rows_after,
-            "error_message": error_message,
-            "duration": duration,
-            "timestamp": datetime.now(UTC).isoformat(),
-        },
-    })
+    await ws_manager.broadcast(
+        {
+            "type": "execution_update",
+            "data": {
+                "execution_id": execution_id,
+                "task_id": task_id,
+                "status": status,
+                "rows_before": rows_before,
+                "rows_after": rows_after,
+                "error_message": error_message,
+                "duration": duration,
+                "timestamp": datetime.now(UTC).isoformat(),
+            },
+        }
+    )
 
 
 # ---------------------------------------------------------------------------
 # WebSocket endpoint
 # ---------------------------------------------------------------------------
+
 
 async def _authenticate_ws(ws: WebSocket) -> bool:
     """Validate token query param for WebSocket connections.
@@ -128,7 +134,7 @@ _WS_PING_INTERVAL = 30  # seconds: server-side ping to keep connection alive
 
 
 @router.websocket("/ws/executions")
-async def execution_updates(ws: WebSocket):
+async def execution_updates(ws: WebSocket) -> None:
     """
     WebSocket endpoint for real-time execution updates.
 
@@ -158,14 +164,14 @@ async def execution_updates(ws: WebSocket):
 
     await ws_manager.connect(ws)
 
-    async def _server_ping():
+    async def _server_ping() -> None:
         """Periodically send server-side ping to keep the connection alive."""
         try:
             while True:
                 await asyncio.sleep(_WS_PING_INTERVAL)
                 await ws.send_text(json.dumps({"type": "ping"}))
-        except Exception:
-            pass  # connection closed elsewhere
+        except Exception as e:
+            logger.debug("WebSocket ping loop ended: %s", e)
 
     ping_task = asyncio.create_task(_server_ping())
     try:
@@ -175,7 +181,7 @@ async def execution_updates(ws: WebSocket):
             # Clients can send "ping" to keep alive
             if data.strip().lower() == "ping":
                 await ws.send_text(json.dumps({"type": "pong"}))
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.debug("WebSocket idle timeout, closing connection")
         await ws.close(code=4002, reason="Idle timeout")
     except WebSocketDisconnect:

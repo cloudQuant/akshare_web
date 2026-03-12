@@ -4,37 +4,124 @@ Data table API routes.
 Provides endpoints for managing data tables created by data acquisition.
 """
 
-from typing import Any
-
+import csv
+import io
 import re
+from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select, func, text
+from fastapi.responses import StreamingResponse
+from loguru import logger
+from sqlalchemy import func, select, text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_current_user, get_current_admin_user, get_db
-from app.core.database import get_data_db
+from app.api.dependencies import get_current_admin_user, get_current_user, get_db
 from app.api.schemas import (
     APIResponse,
     PaginatedParams,
-    PaginatedResponse,
     TableResponse,
     TableSchemaResponse,
 )
+from app.core.database import get_data_db
 from app.models.data_table import DataTable
-from app.utils.helpers import safe_table_name as _safe_table_name
-
+from app.utils.constants import CSV_EXPORT_BATCH_SIZE, XLSX_EXPORT_ROW_LIMIT
+from app.utils.db_result import get_columns_from_result
+from app.utils.helpers import safe_table_name
+from app.utils.serialization import serialize_for_csv, serialize_for_json
 
 router = APIRouter()
 
 
-@router.get("/", )
+def _stream_xlsx_export(
+    safe_filename: str,
+    columns: list[str],
+    rows: list[tuple],
+) -> StreamingResponse:
+    """Build StreamingResponse for Excel export."""
+    import pandas as pd
+
+    df = pd.DataFrame(rows, columns=columns)
+    buf = io.BytesIO()
+    df.to_excel(buf, index=False, engine="openpyxl")
+    buf.seek(0)
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{safe_filename}.xlsx"'},
+    )
+
+
+async def _csv_export_stream(
+    data_db: AsyncSession,
+    safe_name: str,
+    limit: int,
+) -> AsyncIterator[str]:
+    """Async generator for CSV export in batches."""
+    offset = 0
+    header_written = False
+    while offset < limit:
+        batch_limit = min(CSV_EXPORT_BATCH_SIZE, limit - offset)
+        query = text(f"SELECT * FROM {safe_name} LIMIT :limit OFFSET :offset")
+        data_result = await data_db.execute(query, {"limit": batch_limit, "offset": offset})
+        columns = get_columns_from_result(data_result)
+        rows = data_result.fetchall()
+
+        if not rows:
+            if not header_written and columns:
+                buf = io.StringIO()
+                writer = csv.writer(buf)
+                writer.writerow(columns)
+                yield buf.getvalue()
+            break
+
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        if not header_written:
+            writer.writerow(columns)
+            header_written = True
+        for row in rows:
+            writer.writerow([serialize_for_csv(v) for v in row])
+        yield buf.getvalue()
+
+        offset += len(rows)
+        if len(rows) < batch_limit:
+            break
+
+
+def _get_safe_table_name(table_name: str) -> str:
+    """
+    Get safe table name for SQL, raising HTTP 400 on invalid input.
+
+    Args:
+        table_name: Raw table name from metadata
+
+    Returns:
+        Backtick-quoted safe table name
+
+    Raises:
+        HTTPException: 400 if table name is invalid (e.g. SQL injection attempt)
+    """
+    try:
+        return safe_table_name(table_name)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid table name: {e!s}",
+        ) from e
+
+
+@router.get(
+    "/",
+)
 async def list_tables(
-    search: str | None = Query(None, description="Search in table name, display name, or description"),
+    search: str | None = Query(
+        None, description="Search in table name, display name, or description"
+    ),
     params: PaginatedParams = Depends(),
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
-):
+    current_user=Depends(get_current_user),
+) -> APIResponse:
     """
     List data tables.
 
@@ -65,10 +152,7 @@ async def list_tables(
     result = await db.execute(query)
     tables = result.scalars().all()
 
-    items = [
-        TableResponse.model_validate(table)
-        for table in tables
-    ]
+    items = [TableResponse.model_validate(table) for table in tables]
 
     return APIResponse(
         success=True,
@@ -79,24 +163,24 @@ async def list_tables(
             "page": params.page,
             "page_size": params.page_size,
             "total_pages": (total + params.page_size - 1) // params.page_size,
-        }
+        },
     )
 
 
-@router.get("/{table_id}", )
+@router.get(
+    "/{table_id}",
+)
 async def get_table(
     table_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
-):
+    current_user=Depends(get_current_user),
+) -> APIResponse:
     """
     Get data table details.
 
     Returns detailed information about a specific data table.
     """
-    result = await db.execute(
-        select(DataTable).where(DataTable.id == table_id)
-    )
+    result = await db.execute(select(DataTable).where(DataTable.id == table_id))
     table = result.scalar_one_or_none()
 
     if table is None:
@@ -112,22 +196,22 @@ async def get_table(
     )
 
 
-@router.get("/{table_id}/schema", )
+@router.get(
+    "/{table_id}/schema",
+)
 async def get_table_schema(
     table_id: int,
     db: AsyncSession = Depends(get_db),
     data_db: AsyncSession = Depends(get_data_db),
-    current_user = Depends(get_current_user),
-):
+    current_user=Depends(get_current_user),
+) -> TableSchemaResponse:
     """
     Get data table schema.
 
     Returns the database schema for a specific table including
     column names, types, and constraints.
     """
-    result = await db.execute(
-        select(DataTable).where(DataTable.id == table_id)
-    )
+    result = await db.execute(select(DataTable).where(DataTable.id == table_id))
     table = result.scalar_one_or_none()
 
     if table is None:
@@ -137,8 +221,9 @@ async def get_table_schema(
         )
 
     # Get actual schema from data warehouse
+    safe_name = _get_safe_table_name(table.table_name)
     try:
-        query = text(f"DESCRIBE {_safe_table_name(table.table_name)}")
+        query = text(f"DESCRIBE {safe_name}")
         schema_result = await data_db.execute(query)
         columns = [
             {
@@ -150,7 +235,7 @@ async def get_table_schema(
             }
             for row in schema_result.fetchall()
         ]
-    except Exception:
+    except SQLAlchemyError:
         # If table doesn't exist or query fails, return empty
         columns = []
 
@@ -169,16 +254,14 @@ async def get_table_data(
     page_size: int = Query(10, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
     data_db: AsyncSession = Depends(get_data_db),
-    current_user = Depends(get_current_user),
-):
+    current_user=Depends(get_current_user),
+) -> APIResponse:
     """
     Get data from table.
 
     Returns actual data rows from the specified table.
     """
-    result = await db.execute(
-        select(DataTable).where(DataTable.id == table_id)
-    )
+    result = await db.execute(select(DataTable).where(DataTable.id == table_id))
     table = result.scalar_one_or_none()
 
     if table is None:
@@ -191,29 +274,17 @@ async def get_table_data(
     limit = page_size
 
     # Query actual data from data warehouse
+    safe_name = _get_safe_table_name(table.table_name)
     try:
-        query = text(f"SELECT * FROM {_safe_table_name(table.table_name)} ORDER BY id LIMIT :limit OFFSET :offset")
+        query = text(f"SELECT * FROM {safe_name} ORDER BY id LIMIT :limit OFFSET :offset")
         data_result = await data_db.execute(query, {"limit": limit, "offset": offset})
 
         # Get column names from cursor description
-        columns = list(data_result.keys()) if data_result.returns_rows else []
+        columns = get_columns_from_result(data_result)
         rows = data_result.fetchall()
 
-        # Convert rows to dicts, handling non-serializable types
-        import decimal
-        from datetime import date, datetime
-        def serialize_value(v: Any) -> Any:
-            if isinstance(v, decimal.Decimal):
-                return float(v)
-            if isinstance(v, (date, datetime)):
-                return v.isoformat()
-            if isinstance(v, bytes):
-                return v.decode("utf-8", errors="replace")
-            return v
-
         serialized_rows = [
-            {col: serialize_value(row[i]) for i, col in enumerate(columns)}
-            for row in rows
+            {col: serialize_for_json(row[i]) for i, col in enumerate(columns)} for row in rows
         ]
 
         return APIResponse(
@@ -228,28 +299,28 @@ async def get_table_data(
                 "limit": limit,
             },
         )
-    except Exception as e:
+    except SQLAlchemyError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to query table data: {str(e)}",
-        )
+            detail=f"Failed to query table data: {e!s}",
+        ) from e
 
 
-@router.delete("/{table_id}", )
+@router.delete(
+    "/{table_id}",
+)
 async def delete_table(
     table_id: int,
     db: AsyncSession = Depends(get_db),
     data_db: AsyncSession = Depends(get_data_db),
-    current_user = Depends(get_current_admin_user),
-):
+    current_user=Depends(get_current_admin_user),
+) -> APIResponse:
     """
     Delete data table.
 
     Admin only endpoint for dropping tables and metadata.
     """
-    result = await db.execute(
-        select(DataTable).where(DataTable.id == table_id)
-    )
+    result = await db.execute(select(DataTable).where(DataTable.id == table_id))
     table = result.scalar_one_or_none()
 
     if table is None:
@@ -259,15 +330,16 @@ async def delete_table(
         )
 
     # Drop the actual table from data warehouse
+    safe_name = _get_safe_table_name(table.table_name)
     try:
-        query = text(f"DROP TABLE IF EXISTS {_safe_table_name(table.table_name)}")
+        query = text(f"DROP TABLE IF EXISTS {safe_name}")
         await data_db.execute(query)
         await data_db.commit()
-    except Exception as e:
+    except SQLAlchemyError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to drop table: {str(e)}",
-        )
+            detail=f"Failed to drop table: {e!s}",
+        ) from e
 
     # Delete metadata
     await db.delete(table)
@@ -286,21 +358,15 @@ async def export_table_data(
     limit: int = Query(100000, ge=1, le=1000000, description="Maximum rows to export"),
     db: AsyncSession = Depends(get_db),
     data_db: AsyncSession = Depends(get_data_db),
-    current_user = Depends(get_current_user),
-):
+    current_user=Depends(get_current_user),
+) -> StreamingResponse:
     """
     Export table data as CSV or Excel file.
 
     CSV uses streaming to keep memory bounded for large tables.
     Excel is limited to 50,000 rows due to in-memory requirement.
     """
-    import csv
-    import io
-    from fastapi.responses import StreamingResponse
-
-    result = await db.execute(
-        select(DataTable).where(DataTable.id == table_id)
-    )
+    result = await db.execute(select(DataTable).where(DataTable.id == table_id))
     table = result.scalar_one_or_none()
 
     if table is None:
@@ -309,99 +375,38 @@ async def export_table_data(
             detail="Data table not found",
         )
 
-    safe_name = re.sub(r'[^\w]', '_', table.table_name)
-    xlsx_limit = min(limit, 50000)
+    safe_name = _get_safe_table_name(table.table_name)
+    safe_filename = re.sub(r"[^\w]", "_", table.table_name)
+    xlsx_limit = min(limit, XLSX_EXPORT_ROW_LIMIT)
 
     if format == "xlsx":
-        # Excel requires full load; cap at 50k rows
         try:
-            query = text(
-                f"SELECT * FROM {_safe_table_name(table.table_name)} LIMIT :limit"
-            )
+            query = text(f"SELECT * FROM {safe_name} LIMIT :limit")
             data_result = await data_db.execute(query, {"limit": xlsx_limit})
-            columns = list(data_result.keys()) if data_result.returns_rows else []
+            columns = get_columns_from_result(data_result)
             rows = data_result.fetchall()
-        except Exception as e:
+        except SQLAlchemyError as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to query table data: {str(e)}",
-            )
+                detail=f"Failed to query table data: {e!s}",
+            ) from e
+        return _stream_xlsx_export(safe_filename, columns, rows)
 
-        import pandas as pd
-        df = pd.DataFrame(rows, columns=columns)
-        buf = io.BytesIO()
-        df.to_excel(buf, index=False, engine="openpyxl")
-        buf.seek(0)
-        return StreamingResponse(
-            buf,
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={"Content-Disposition": f'attachment; filename="{safe_name}.xlsx"'},
-        )
-    else:
-        # CSV: stream in batches to keep memory low
-        batch_size = 10000
-
-        async def _csv_stream():
-            import decimal
-            from datetime import date, datetime as _dt
-
-            def _serialise(v):
-                if isinstance(v, decimal.Decimal):
-                    return str(v)
-                if isinstance(v, (date, _dt)):
-                    return v.isoformat()
-                if isinstance(v, bytes):
-                    return v.decode("utf-8", errors="replace")
-                return v
-
-            offset = 0
-            header_written = False
-            while offset < limit:
-                batch_limit = min(batch_size, limit - offset)
-                query = text(
-                    f"SELECT * FROM {_safe_table_name(table.table_name)} "
-                    f"LIMIT :limit OFFSET :offset"
-                )
-                data_result = await data_db.execute(
-                    query, {"limit": batch_limit, "offset": offset}
-                )
-                columns = list(data_result.keys()) if data_result.returns_rows else []
-                rows = data_result.fetchall()
-
-                if not rows:
-                    if not header_written and columns:
-                        buf = io.StringIO()
-                        writer = csv.writer(buf)
-                        writer.writerow(columns)
-                        yield buf.getvalue()
-                    break
-
-                buf = io.StringIO()
-                writer = csv.writer(buf)
-                if not header_written:
-                    writer.writerow(columns)
-                    header_written = True
-                for row in rows:
-                    writer.writerow([_serialise(v) for v in row])
-                yield buf.getvalue()
-
-                offset += len(rows)
-                if len(rows) < batch_limit:
-                    break
-
-        return StreamingResponse(
-            _csv_stream(),
-            media_type="text/csv",
-            headers={"Content-Disposition": f'attachment; filename="{safe_name}.csv"'},
-        )
+    return StreamingResponse(
+        _csv_export_stream(data_db, safe_name, limit),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{safe_filename}.csv"'},
+    )
 
 
-@router.post("/refresh", )
+@router.post(
+    "/refresh",
+)
 async def refresh_table_metadata(
     db: AsyncSession = Depends(get_db),
     data_db: AsyncSession = Depends(get_data_db),
-    current_user = Depends(get_current_admin_user),
-):
+    current_user=Depends(get_current_admin_user),
+) -> APIResponse:
     """
     Refresh table metadata.
 
@@ -416,15 +421,14 @@ async def refresh_table_metadata(
 
     for table in tables:
         try:
-            # Get row count from data warehouse
-            count_query = text(f"SELECT COUNT(*) FROM {_safe_table_name(table.table_name)}")
+            safe_name = _get_safe_table_name(table.table_name)
+            count_query = text(f"SELECT COUNT(*) FROM {safe_name}")
             count_result = await data_db.execute(count_query)
             table.row_count = count_result.scalar() or 0
 
             updated_count += 1
-        except Exception:
-            # Skip tables that don't exist in warehouse
-            pass
+        except SQLAlchemyError as e:
+            logger.debug("Table %s not in warehouse, skipping: %s", table.table_name, e)
 
     await db.commit()
 

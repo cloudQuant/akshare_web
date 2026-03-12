@@ -4,10 +4,6 @@ Database module extended tests.
 Additional tests for database functionality.
 """
 
-import pytest
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
-
 
 class TestDatabaseFunctions:
     """Test database module functions."""
@@ -32,8 +28,8 @@ class TestDatabaseFunctions:
 
     def test_engine_is_async(self):
         """Test database engine is async."""
+
         from app.core.database import engine
-        from sqlalchemy.ext.asyncio import AsyncEngine
 
         # Engine should be an AsyncEngine or compatible
         assert engine is not None
@@ -43,7 +39,7 @@ class TestDatabaseFunctions:
         from app.core.database import Base
 
         assert Base.metadata is not None
-        assert hasattr(Base.metadata, 'create_all')
+        assert hasattr(Base.metadata, "create_all")
 
     def test_async_session_maker(self):
         """Test async session maker."""
@@ -59,56 +55,56 @@ class TestAPIRoutes:
         """Test auth router is registered."""
         from app.main import app
 
-        routes = [r for r in app.routes if hasattr(r, 'path')]
-        auth_routes = [r.path for r in routes if r.path.startswith('/api/auth')]
+        routes = [r for r in app.routes if hasattr(r, "path")]
+        auth_routes = [r.path for r in routes if r.path.startswith("/api/auth")]
         assert len(auth_routes) > 0
 
     def test_users_router_registered(self):
         """Test users router is registered."""
         from app.main import app
 
-        routes = [r for r in app.routes if hasattr(r, 'path')]
-        users_routes = [r.path for r in routes if r.path.startswith('/api/users')]
+        routes = [r for r in app.routes if hasattr(r, "path")]
+        users_routes = [r.path for r in routes if r.path.startswith("/api/users")]
         assert len(users_routes) > 0
 
     def test_tasks_router_registered(self):
         """Test tasks router is registered."""
         from app.main import app
 
-        routes = [r for r in app.routes if hasattr(r, 'path')]
-        tasks_routes = [r.path for r in routes if r.path.startswith('/api/tasks')]
+        routes = [r for r in app.routes if hasattr(r, "path")]
+        tasks_routes = [r.path for r in routes if r.path.startswith("/api/tasks")]
         assert len(tasks_routes) > 0
 
     def test_scripts_router_registered(self):
         """Test scripts router is registered."""
         from app.main import app
 
-        routes = [r for r in app.routes if hasattr(r, 'path')]
-        scripts_routes = [r.path for r in routes if r.path.startswith('/api/scripts')]
+        routes = [r for r in app.routes if hasattr(r, "path")]
+        scripts_routes = [r.path for r in routes if r.path.startswith("/api/scripts")]
         assert len(scripts_routes) > 0
 
     def test_executions_router_registered(self):
         """Test executions router is registered."""
         from app.main import app
 
-        routes = [r for r in app.routes if hasattr(r, 'path')]
-        exec_routes = [r.path for r in routes if r.path.startswith('/api/executions')]
+        routes = [r for r in app.routes if hasattr(r, "path")]
+        exec_routes = [r.path for r in routes if r.path.startswith("/api/executions")]
         assert len(exec_routes) > 0
 
     def test_tables_router_registered(self):
         """Test tables router is registered."""
         from app.main import app
 
-        routes = [r for r in app.routes if hasattr(r, 'path')]
-        tables_routes = [r.path for r in routes if r.path.startswith('/api/tables')]
+        routes = [r for r in app.routes if hasattr(r, "path")]
+        tables_routes = [r.path for r in routes if r.path.startswith("/api/tables")]
         assert len(tables_routes) > 0
 
     def test_data_router_registered(self):
         """Test data router is registered."""
         from app.main import app
 
-        routes = [r for r in app.routes if hasattr(r, 'path')]
-        data_routes = [r.path for r in routes if r.path.startswith('/api/data')]
+        routes = [r for r in app.routes if hasattr(r, "path")]
+        data_routes = [r.path for r in routes if r.path.startswith("/api/data")]
         assert len(data_routes) > 0
 
 
@@ -119,8 +115,8 @@ class TestAPIEndpoints:
         """Test health check endpoint exists."""
         from app.main import app
 
-        routes = [r.path for r in app.routes if hasattr(r, 'path')]
-        health_routes = [r for r in routes if 'health' in r.lower()]
+        routes = [r.path for r in app.routes if hasattr(r, "path")]
+        health_routes = [r for r in routes if "health" in r.lower()]
         # May or may not have health endpoint
         assert len(health_routes) >= 0
 
@@ -129,8 +125,8 @@ class TestAPIEndpoints:
         from app.main import app
 
         # FastAPI automatically adds /docs
-        routes = [r.path for r in app.routes if hasattr(r, 'path')]
-        assert '/docs' in routes or '/openapi.json' in routes
+        routes = [r.path for r in app.routes if hasattr(r, "path")]
+        assert "/docs" in routes or "/openapi.json" in routes
 
 
 class TestMiddleware:
@@ -141,14 +137,14 @@ class TestMiddleware:
         from app.main import app
 
         # Check for CORS in user_middleware
-        has_cors = any('cors' in str(m).lower() for m in app.user_middleware)
+        has_cors = any("cors" in str(m).lower() for m in app.user_middleware)
         assert has_cors
 
     def test_middleware_stack(self):
         """Test middleware stack exists."""
         from app.main import app
 
-        assert hasattr(app, 'user_middleware')
+        assert hasattr(app, "user_middleware")
         assert isinstance(app.user_middleware, list)
 
 
@@ -160,63 +156,63 @@ class TestAPIRouters:
         from app.api import auth
 
         assert auth is not None
-        assert hasattr(auth, 'router')
+        assert hasattr(auth, "router")
 
     def test_users_router_importable(self):
         """Test users router can be imported."""
         from app.api import users
 
         assert users is not None
-        assert hasattr(users, 'router')
+        assert hasattr(users, "router")
 
     def test_tasks_router_importable(self):
         """Test tasks router can be imported."""
         from app.api import tasks
 
         assert tasks is not None
-        assert hasattr(tasks, 'router')
+        assert hasattr(tasks, "router")
 
     def test_scripts_router_importable(self):
         """Test scripts router can be imported."""
         from app.api import scripts
 
         assert scripts is not None
-        assert hasattr(scripts, 'router')
+        assert hasattr(scripts, "router")
 
     def test_executions_router_importable(self):
         """Test executions router can be imported."""
         from app.api import executions
 
         assert executions is not None
-        assert hasattr(executions, 'router')
+        assert hasattr(executions, "router")
 
     def test_tables_router_importable(self):
         """Test tables router can be imported."""
         from app.api import tables
 
         assert tables is not None
-        assert hasattr(tables, 'router')
+        assert hasattr(tables, "router")
 
     def test_data_router_importable(self):
         """Test data router can be imported."""
         from app.api import data
 
         assert data is not None
-        assert hasattr(data, 'router')
+        assert hasattr(data, "router")
 
     def test_settings_router_importable(self):
         """Test settings router can be imported."""
         from app.api import settings
 
         assert settings is not None
-        assert hasattr(settings, 'router')
+        assert hasattr(settings, "router")
 
     def test_interfaces_router_importable(self):
         """Test interfaces router can be imported."""
         from app.api import interfaces
 
         assert interfaces is not None
-        assert hasattr(interfaces, 'router')
+        assert hasattr(interfaces, "router")
 
 
 class TestDependenciesModule:
@@ -227,17 +223,17 @@ class TestDependenciesModule:
         from app.api.dependencies import security
 
         assert security is not None
-        assert security.auto_error == False
+        assert not security.auto_error
 
     def test_dependencies_all_functions(self):
         """Test all dependency functions are callable."""
         from app.api import dependencies
 
         functions = [
-            'get_current_user',
-            'get_current_active_user',
-            'get_current_admin_user',
-            'get_optional_user',
+            "get_current_user",
+            "get_current_active_user",
+            "get_current_admin_user",
+            "get_optional_user",
         ]
 
         for func_name in functions:
@@ -263,8 +259,9 @@ class TestRateLimiterModule:
 
     def test_is_testing_checks_env(self):
         """Test is_testing checks environment variable."""
-        from app.api.rate_limit import is_testing
         import os
+
+        from app.api.rate_limit import is_testing
 
         # Set testing mode
         old_val = os.environ.get("TESTING")

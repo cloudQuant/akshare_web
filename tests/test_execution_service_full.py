@@ -4,12 +4,13 @@ Comprehensive tests for ExecutionService.
 Covers create, update, get, list, stats, recent, running, failed, delete operations.
 """
 
-import pytest
 from datetime import UTC, datetime
+
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.task import ScheduledTask, ScheduleType, TaskStatus, TriggeredBy
 from app.services.execution_service import ExecutionService
-from app.models.task import TaskExecution, TaskStatus, TriggeredBy, ScheduledTask, ScheduleType
 
 
 async def _create_task(db: AsyncSession, user_id: int = 1) -> ScheduledTask:

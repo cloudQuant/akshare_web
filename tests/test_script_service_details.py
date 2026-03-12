@@ -5,7 +5,6 @@ Tests for ScriptService methods.
 """
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, Mock
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -15,8 +14,8 @@ class TestScriptServiceCreate:
     @pytest.mark.asyncio
     async def test_create_script(self, test_db: AsyncSession):
         """Test creating a script."""
+        from app.models.data_script import ScriptFrequency
         from app.services.script_service import ScriptService
-        from app.models.data_script import DataScript, ScriptFrequency
 
         service = ScriptService(test_db)
 
@@ -37,9 +36,9 @@ class TestScriptServiceCreate:
     @pytest.mark.asyncio
     async def test_create_script_duplicate(self, test_db: AsyncSession):
         """Test creating duplicate script raises error."""
-        from app.services.script_service import ScriptService
-        from app.models.data_script import DataScript, ScriptFrequency
         from sqlalchemy.exc import IntegrityError
+
+        from app.services.script_service import ScriptService
 
         service = ScriptService(test_db)
 
@@ -68,7 +67,6 @@ class TestScriptServiceUpdate:
     async def test_update_script(self, test_db: AsyncSession):
         """Test updating a script."""
         from app.services.script_service import ScriptService
-        from app.models.data_script import DataScript
 
         service = ScriptService(test_db)
 

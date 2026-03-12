@@ -1,16 +1,20 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { dataApi } from '@/api/data'
-import type { Execution } from '@/types'
+import type { Execution, ExecutionStats, PaginatedResponse } from '@/types'
 
 const executions = ref<Execution[]>([])
 const loading = ref(false)
-const stats = ref<any>(null)
+const stats = ref<ExecutionStats | null>(null)
 const currentPage = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
 
-const statusMap: Record<string, { text: string; type: any }> = {
+/** Element Plus ElTag type values */
+const statusMap: Record<
+  string,
+  { text: string; type: 'info' | 'primary' | 'success' | 'danger' | 'warning' }
+> = {
   pending: { text: '等待中', type: 'info' },
   running: { text: '执行中', type: 'primary' },
   success: { text: '成功', type: 'success' },
@@ -24,8 +28,9 @@ async function loadExecutions() {
       page: currentPage.value,
       page_size: pageSize.value,
     })
-    executions.value = (data as any).items || []
-    total.value = (data as any).total || 0
+    const res = data as PaginatedResponse<Execution>
+    executions.value = res.items ?? []
+    total.value = res.total ?? 0
   } catch (error) {
     console.error('Failed to load executions:', error)
   } finally {
@@ -68,23 +73,38 @@ onMounted(() => {
 <template>
   <div class="executions-view">
     <!-- Stats Cards -->
-    <div v-if="stats" class="stats-cards">
+    <div
+      v-if="stats"
+      class="stats-cards"
+    >
       <el-card class="stat-card">
         <div class="stat-content">
-          <div class="stat-value">{{ stats.total_count }}</div>
-          <div class="stat-label">总执行次数</div>
+          <div class="stat-value">
+            {{ stats.total_count }}
+          </div>
+          <div class="stat-label">
+            总执行次数
+          </div>
         </div>
       </el-card>
       <el-card class="stat-card success">
         <div class="stat-content">
-          <div class="stat-value">{{ stats.success_count }}</div>
-          <div class="stat-label">成功次数</div>
+          <div class="stat-value">
+            {{ stats.success_count }}
+          </div>
+          <div class="stat-label">
+            成功次数
+          </div>
         </div>
       </el-card>
       <el-card class="stat-card danger">
         <div class="stat-content">
-          <div class="stat-value">{{ stats.failed_count }}</div>
-          <div class="stat-label">失败次数</div>
+          <div class="stat-value">
+            {{ stats.failed_count }}
+          </div>
+          <div class="stat-label">
+            失败次数
+          </div>
         </div>
       </el-card>
       <el-card class="stat-card warning">
@@ -92,7 +112,9 @@ onMounted(() => {
           <div class="stat-value">
             {{ stats.success_rate ? (stats.success_rate * 100).toFixed(1) : 0 }}%
           </div>
-          <div class="stat-label">成功率</div>
+          <div class="stat-label">
+            成功率
+          </div>
         </div>
       </el-card>
     </div>
@@ -109,32 +131,66 @@ onMounted(() => {
         style="width: 100%"
         stripe
       >
-        <el-table-column prop="id" label="ID" width="80" />
-        <el-table-column prop="script_id" label="脚本ID" width="100" />
-        <el-table-column label="状态" width="100">
+        <el-table-column
+          prop="id"
+          label="ID"
+          width="80"
+        />
+        <el-table-column
+          prop="script_id"
+          label="脚本ID"
+          width="100"
+        />
+        <el-table-column
+          label="状态"
+          width="100"
+        >
           <template #default="{ row }">
-            <el-tag :type="getStatusInfo(row.status).type" size="small">
+            <el-tag
+              :type="getStatusInfo(row.status).type"
+              size="small"
+            >
               {{ getStatusInfo(row.status).text }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="start_time" label="开始时间" width="180">
+        <el-table-column
+          prop="start_time"
+          label="开始时间"
+          width="180"
+        >
           <template #default="{ row }">
             {{ new Date(row.start_time).toLocaleString() }}
           </template>
         </el-table-column>
-        <el-table-column prop="duration" label="耗时(秒)" width="100">
+        <el-table-column
+          prop="duration"
+          label="耗时(秒)"
+          width="100"
+        >
           <template #default="{ row }">
             {{ row.duration ? row.duration.toFixed(2) : '-' }}
           </template>
         </el-table-column>
-        <el-table-column prop="rows_processed" label="处理行数" width="100">
+        <el-table-column
+          prop="rows_processed"
+          label="处理行数"
+          width="100"
+        >
           <template #default="{ row }">
             {{ row.rows_processed || '-' }}
           </template>
         </el-table-column>
-        <el-table-column prop="error_message" label="错误信息" show-overflow-tooltip />
-        <el-table-column label="操作" width="100" fixed="right">
+        <el-table-column
+          prop="error_message"
+          label="错误信息"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          label="操作"
+          width="100"
+          fixed="right"
+        >
           <template #default="{ row }">
             <el-button
               v-if="row.status === 'failed'"

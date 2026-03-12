@@ -41,7 +41,10 @@ function toggleCollapse() {
 <template>
   <el-container class="layout-container">
     <!-- Sidebar -->
-    <el-aside :width="isCollapse ? '64px' : '200px'" class="sidebar">
+    <el-aside
+      :width="isCollapse ? '64px' : '200px'"
+      class="sidebar"
+    >
       <div class="logo">
         <span v-if="!isCollapse">akshare_web</span>
         <span v-else>ak</span>
@@ -58,7 +61,9 @@ function toggleCollapse() {
           :index="item.index"
         >
           <el-icon><component :is="item.icon" /></el-icon>
-          <template #title>{{ item.name }}</template>
+          <template #title>
+            {{ item.name }}
+          </template>
         </el-menu-item>
       </el-menu>
     </el-aside>
@@ -76,7 +81,10 @@ function toggleCollapse() {
         <div class="header-right">
           <el-dropdown>
             <span class="user-dropdown">
-              <el-avatar :size="32" :icon="'UserFilled'" />
+              <el-avatar
+                :size="32"
+                :icon="'UserFilled'"
+              />
               <span class="username">{{ authStore.user?.email }}</span>
             </span>
             <template #dropdown>
@@ -84,7 +92,10 @@ function toggleCollapse() {
                 <el-dropdown-item disabled>
                   角色: {{ authStore.user?.role }}
                 </el-dropdown-item>
-                <el-dropdown-item divided @click="handleLogout">
+                <el-dropdown-item
+                  divided
+                  @click="handleLogout"
+                >
                   退出登录
                 </el-dropdown-item>
               </el-dropdown-menu>

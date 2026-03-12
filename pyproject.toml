@@ -74,6 +74,8 @@ dev = [
     "pytest>=8.3.0",
     "pytest-asyncio>=0.24.0",
     "pytest-cov>=6.0.0",
+    "ruff>=0.8.0",
+    "bandit>=1.7.0",
 ]
 
 # Install akshare only:  pip install .
@@ -91,9 +93,44 @@ packages = ["akshare"]
 [tool.setuptools.package-data]
 akshare = ["*.dat", "*.json", "category_mapping/*"]
 
-[tool.black]
+[tool.ruff]
 line-length = 100
-target-version = ["py310", "py311", "py312"]
+target-version = "py310"
+exclude = ["akshare/", "alembic/versions/"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "N", "W", "SIM", "S", "PTH", "R", "TCH", "ERA", "C901"]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "E402",   # module level import not at top
+    "F821",   # undefined name
+    "F841",   # local variable assigned but never used
+    "E721",   # type comparison
+    "E722",   # bare except
+    "E712",   # comparison to True/False
+    "B008",   # function call in default arg - FastAPI Depends() is intentional
+    "N805",   # first arg of method not 'self' - test mocks use self_inner deliberately
+    "S101",   # assert used - allow in tests
+    "S104",   # possible binding to all interfaces - 0.0.0.0 is intentional for Docker
+    "S105",   # possible hardcoded password - config uses env vars
+    "S106",   # possible hardcoded password - config uses env vars
+    "S311",   # random for cryptographic purposes - JWT uses secrets
+    "S608",   # SQL injection - table names validated via safe_table_name() in tables.py
+    "S107",   # hardcoded password - false positive for token_type="access" in security.py
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B017", "N806", "S101", "S105", "S106", "S110"]  # S110: try/except/pass ok in test cleanup
+# ANN401: dynamic types (akshare calls, APScheduler Job, generic cache) - Any intentional
+"app/data_fetch/providers/akshare_provider.py" = ["ANN401"]
+"app/data_fetch/scripts/*" = ["ANN401"]
+"app/services/scheduler_service.py" = ["ANN401"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.format]
+quote-style = "double"
 
 [tool.mypy]
 python_version = "3.11"
@@ -102,9 +139,61 @@ warn_unused_configs = true
 disallow_untyped_defs = false
 check_untyped_defs = true
 ignore_missing_imports = true
-exclude = ["akshare/", "tests/", "alembic/"]
+exclude = ["akshare/", "tests/", "alembic/", "app/data_fetch/"]
 
 [[tool.mypy.overrides]]
 module = "app.*"
 disallow_untyped_defs = false
 check_untyped_defs = true
+
+# Stricter typing for well-typed modules (gradual rollout)
+[[tool.mypy.overrides]]
+module = "app.models.*"
+disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = "app.api.schemas"
+disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = "app.core.config"
+disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = "app.utils.constants"
+disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = "app.utils.validators"
+disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = "app.utils.db_result"
+disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = "akshare.*"
+follow_imports = "skip"
+
+[[tool.mypy.overrides]]
+module = "app.data_fetch.*"
+follow_imports = "skip"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+addopts = "-v --tb=short --timeout=120"
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.coverage.run]
+source = ["app"]
+omit = ["app/__init__.py", "tests/*"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 70
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+]

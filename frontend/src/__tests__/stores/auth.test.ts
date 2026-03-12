@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useAuthStore } from '@/stores/auth'
+import type { AuthResponse, User } from '@/types'
 
 // Mock the auth API
 vi.mock('@/api/auth', () => ({
@@ -46,20 +47,27 @@ describe('Auth Store', () => {
 
   it('isAuthenticated returns true when user and token exist', () => {
     const store = useAuthStore()
-    store.user = { id: 1, email: 'test@example.com', role: 'user', is_active: true, created_at: '', updated_at: '' } as any
+    store.user = {
+      id: 1,
+      email: 'test@example.com',
+      role: 'user',
+      is_active: true,
+      created_at: '',
+      updated_at: '',
+    } as User
     store.accessToken = 'token123'
     expect(store.isAuthenticated).toBe(true)
   })
 
   it('isAdmin returns false for regular user', () => {
     const store = useAuthStore()
-    store.user = { id: 1, role: 'user' } as any
+    store.user = { id: 1, role: 'user' } as User
     expect(store.isAdmin).toBe(false)
   })
 
   it('isAdmin returns true for admin user', () => {
     const store = useAuthStore()
-    store.user = { id: 1, role: 'admin' } as any
+    store.user = { id: 1, role: 'admin' } as User
     expect(store.isAdmin).toBe(true)
   })
 
@@ -70,7 +78,7 @@ describe('Auth Store', () => {
       refresh_token: 'refresh123',
       user: { id: 1, email: 'test@example.com', role: 'user' },
     }
-    vi.mocked(authApi.login).mockResolvedValue(mockResponse as any)
+    vi.mocked(authApi.login).mockResolvedValue(mockResponse as AuthResponse)
 
     const store = useAuthStore()
     await store.login({ email: 'test@example.com', password: 'pass' })
@@ -88,7 +96,7 @@ describe('Auth Store', () => {
       refresh_token: 'refresh456',
       user: { id: 2, email: 'new@example.com', role: 'user' },
     }
-    vi.mocked(authApi.register).mockResolvedValue(mockResponse as any)
+    vi.mocked(authApi.register).mockResolvedValue(mockResponse as AuthResponse)
 
     const store = useAuthStore()
     await store.register({ email: 'new@example.com', password: 'pass', password_confirm: 'pass' })
@@ -99,7 +107,7 @@ describe('Auth Store', () => {
 
   it('logout clears state', () => {
     const store = useAuthStore()
-    store.user = { id: 1 } as any
+    store.user = { id: 1 } as User
     store.accessToken = 'token'
     store.refreshToken = 'refresh'
 
@@ -115,14 +123,14 @@ describe('Auth Store', () => {
 
   it('setUser updates user', () => {
     const store = useAuthStore()
-    const user = { id: 1, email: 'test@example.com' } as any
+    const user = { id: 1, email: 'test@example.com' } as User
     store.setUser(user)
     expect(store.user).toEqual(user)
   })
 
   it('persistAuth saves to localStorage', () => {
     const store = useAuthStore()
-    store.user = { id: 1 } as any
+    store.user = { id: 1 } as User
     store.accessToken = 'access'
     store.refreshToken = 'refresh'
 
@@ -175,7 +183,15 @@ describe('Auth Store', () => {
     vi.mocked(authApi.refreshToken).mockResolvedValue({
       access_token: 'new_access',
       refresh_token: 'new_refresh',
-    } as any)
+      user: {
+        id: 0,
+        email: '',
+        role: 'user',
+        is_active: true,
+        created_at: '',
+        updated_at: '',
+      },
+    } as AuthResponse)
 
     const store = useAuthStore()
     store.refreshToken = 'old_refresh'

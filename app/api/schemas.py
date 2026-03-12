@@ -7,7 +7,8 @@ Defines request/response schemas used across API endpoints.
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
+
 from app.models.user import UserRole
 
 
@@ -17,9 +18,9 @@ def validate_password_complexity(password: str) -> str:
     Reusable across all schemas that accept a password field.
     """
     if not any(c.isalpha() for c in password):
-        raise ValueError('Password must contain at least one letter')
+        raise ValueError("Password must contain at least one letter")
     if not any(c.isdigit() for c in password):
-        raise ValueError('Password must contain at least one digit')
+        raise ValueError("Password must contain at least one digit")
     return password
 
 
@@ -75,14 +76,20 @@ class RegisterRequest(BaseModel):
         ...,
         min_length=8,
         max_length=100,
-        description="Password must be at least 8 characters with letters and digits"
+        description="Password must be at least 8 characters with letters and digits",
     )
     password_confirm: str = Field(..., min_length=8, max_length=100)
 
-    @field_validator('password')
+    @field_validator("password")
     @classmethod
     def check_password(cls, v: str) -> str:
         return validate_password_complexity(v)
+
+    @model_validator(mode="after")
+    def check_password_match(self) -> "RegisterRequest":
+        if self.password != self.password_confirm:
+            raise ValueError("Passwords do not match")
+        return self
 
 
 class TokenResponse(BaseModel):
@@ -149,7 +156,7 @@ class ResetPasswordRequest(BaseModel):
         description="Password must be at least 8 characters with letters and digits",
     )
 
-    @field_validator('new_password')
+    @field_validator("new_password")
     @classmethod
     def check_password(cls, v: str) -> str:
         return validate_password_complexity(v)

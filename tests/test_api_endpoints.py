@@ -78,7 +78,7 @@ class TestTasksAPI:
                 "name": "Test Task",
                 "script_id": "test_script",
                 "schedule_type": "manual",
-            }
+            },
         )
 
         assert response.status_code in [201, 401, 403]
@@ -93,10 +93,7 @@ class TestTasksAPI:
     @pytest.mark.asyncio
     async def test_update_task_unauthorized(self, test_client: AsyncClient):
         """Test updating task without authentication."""
-        response = await test_client.put(
-            "/api/tasks/1",
-            json={"name": "Updated Name"}
-        )
+        response = await test_client.put("/api/tasks/1", json={"name": "Updated Name"})
 
         assert response.status_code in [200, 401, 403, 404]
 
@@ -170,7 +167,7 @@ class TestScriptsAPI:
                 "script_name": "Test Script",
                 "category": "test",
                 "module_path": "test.module",
-            }
+            },
         )
 
         assert response.status_code in [201, 401, 403]
@@ -179,8 +176,7 @@ class TestScriptsAPI:
     async def test_update_script_unauthorized(self, test_client: AsyncClient):
         """Test updating script without authentication."""
         response = await test_client.put(
-            "/api/scripts/admin/scripts/test_script",
-            json={"script_name": "Updated Name"}
+            "/api/scripts/admin/scripts/test_script", json={"script_name": "Updated Name"}
         )
 
         assert response.status_code in [200, 401, 403, 404]
@@ -250,7 +246,7 @@ class TestDataAPI:
             json={
                 "interface_id": "stock_zh_a_hist",
                 "parameters": {"symbol": "000001"},
-            }
+            },
         )
 
         assert response.status_code in [201, 202, 400, 401, 422]
@@ -297,10 +293,7 @@ class TestSettingsAPI:
     @pytest.mark.asyncio
     async def test_update_settings_unauthorized(self, test_client: AsyncClient):
         """Test updating settings without authentication."""
-        response = await test_client.put(
-            "/api/settings/",
-            json={"setting_name": "test_value"}
-        )
+        response = await test_client.put("/api/settings/", json={"setting_name": "test_value"})
 
         assert response.status_code in [200, 401, 403, 404]
 
@@ -319,7 +312,7 @@ class TestSettingsAPI:
             json={
                 "host": "localhost",
                 "port": 3306,
-            }
+            },
         )
 
         assert response.status_code in [200, 401, 403, 404]

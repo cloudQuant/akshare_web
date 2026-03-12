@@ -3,9 +3,10 @@ Tests for InterfaceLoader covering _load_interface, _ensure_categories,
 _parse_example, _get_category, _parse_parameters, _create_parameter_definitions.
 """
 
-import pytest
 import inspect
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from app.services.interface_loader import InterfaceLoader
 
@@ -49,7 +50,6 @@ class TestLoadInterface:
 
         def sample_func(x: str, y: int = 5):
             """Sample function."""
-            pass
 
         await loader._load_interface("sample_func", sample_func, mock_db)
         mock_db.add.assert_not_called()
@@ -67,7 +67,6 @@ class TestLoadInterface:
 
         def stock_data(symbol: str = "000001"):
             """Get stock data."""
-            pass
 
         await loader._load_interface("stock_data", stock_data, mock_db)
         mock_db.add.assert_called()
@@ -140,6 +139,7 @@ class TestParseParameters:
     def test_with_params(self, loader):
         def func(x: str, y: int = 5):
             pass
+
         sig = inspect.signature(func)
         result = loader._parse_parameters(sig, "")
         assert "x" in result
@@ -150,6 +150,7 @@ class TestParseParameters:
     def test_skips_self_kwargs(self, loader):
         def func(self, x: str, **kwargs):
             pass
+
         sig = inspect.signature(func)
         result = loader._parse_parameters(sig, "")
         assert "self" not in result
@@ -170,6 +171,7 @@ class TestGetTypeName:
 class TestMapParameterType:
     def test_types(self, loader):
         from app.models.interface import ParameterType
+
         assert loader._map_parameter_type(str) == ParameterType.STRING
         assert loader._map_parameter_type(int) == ParameterType.INTEGER
         assert loader._map_parameter_type(float) == ParameterType.FLOAT
@@ -190,9 +192,13 @@ class TestLoadFromAkshare:
             mock_sm.return_value.__aenter__ = AsyncMock(return_value=mock_session)
             mock_sm.return_value.__aexit__ = AsyncMock(return_value=False)
 
-            with patch.object(loader, '_ensure_categories', new_callable=AsyncMock), \
-                 patch.object(loader, '_discover_akshare_functions', return_value=[("func1", lambda: None)]), \
-                 patch.object(loader, '_load_interface', new_callable=AsyncMock):
+            with (
+                patch.object(loader, "_ensure_categories", new_callable=AsyncMock),
+                patch.object(
+                    loader, "_discover_akshare_functions", return_value=[("func1", lambda: None)]
+                ),
+                patch.object(loader, "_load_interface", new_callable=AsyncMock),
+            ):
                 count = await loader.load_from_akshare()
             assert count == 1
 
@@ -204,8 +210,17 @@ class TestLoadFromAkshare:
             mock_sm.return_value.__aenter__ = AsyncMock(return_value=mock_session)
             mock_sm.return_value.__aexit__ = AsyncMock(return_value=False)
 
-            with patch.object(loader, '_ensure_categories', new_callable=AsyncMock), \
-                 patch.object(loader, '_discover_akshare_functions', return_value=[("func1", lambda: None)]), \
-                 patch.object(loader, '_load_interface', new_callable=AsyncMock, side_effect=RuntimeError("fail")):
+            with (
+                patch.object(loader, "_ensure_categories", new_callable=AsyncMock),
+                patch.object(
+                    loader, "_discover_akshare_functions", return_value=[("func1", lambda: None)]
+                ),
+                patch.object(
+                    loader,
+                    "_load_interface",
+                    new_callable=AsyncMock,
+                    side_effect=RuntimeError("fail"),
+                ),
+            ):
                 count = await loader.load_from_akshare()
             assert count == 0

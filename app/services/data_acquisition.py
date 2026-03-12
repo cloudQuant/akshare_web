@@ -11,16 +11,27 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from typing import Any
 
-import akshare as ak
 import pandas as pd
 from loguru import logger
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.interface import DataInterface
+import akshare as ak
 from app.models.data_table import DataTable
+from app.models.interface import DataInterface
 from app.models.task import TaskExecution, TaskStatus
-from app.utils.helpers import generate_table_name, clean_column_names, safe_column_name, safe_table_name
+from app.utils.constants import (
+    BATCH_SIZE_LARGE,
+    BATCH_SIZE_SMALL,
+    BATCH_SIZE_THRESHOLD,
+)
+from app.utils.db_result import get_rowcount
+from app.utils.helpers import (
+    clean_column_names,
+    generate_table_name,
+    safe_column_name,
+    safe_table_name,
+)
 
 
 class DataAcquisitionService:
@@ -33,7 +44,7 @@ class DataAcquisitionService:
     # Dedicated thread pool for blocking akshare calls (avoids starving default pool)
     _akshare_executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="akshare")
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._active_executions: dict[int, dict] = {}
 
     async def execute_download(
@@ -61,9 +72,7 @@ class DataAcquisitionService:
         from sqlalchemy import select
 
         # Get interface
-        result = await db.execute(
-            select(DataInterface).where(DataInterface.id == interface_id)
-        )
+        result = await db.execute(select(DataInterface).where(DataInterface.id == interface_id))
         interface = result.scalar_one_or_none()
 
         if interface is None:
@@ -87,9 +96,7 @@ class DataAcquisitionService:
 
         try:
             # Execute akshare function
-            logger.info(
-                f"Executing interface {interface.name} with parameters: {parameters}"
-            )
+            logger.info(f"Executing interface {interface.name} with parameters: {parameters}")
 
             # Call akshare function
             data = await self._call_akshare_function(interface, parameters)
@@ -97,8 +104,8 @@ class DataAcquisitionService:
             if data is None or (isinstance(data, pd.DataFrame) and data.empty):
                 logger.warning(f"Interface {interface.name} returned no data")
                 execution.status = TaskStatus.COMPLETED
-                execution.completed_at = datetime.now(UTC)
-                execution.rows_affected = 0
+                execution.end_time = datetime.now(UTC)
+                execution.rows_after = 0
                 await db.commit()
                 return 0
 
@@ -117,7 +124,7 @@ class DataAcquisitionService:
             logger.error(f"Data acquisition failed for {interface.name}: {e}")
             execution.status = TaskStatus.FAILED
             execution.error_message = str(e)
-            execution.completed_at = datetime.now(UTC)
+            execution.end_time = datetime.now(UTC)
             await db.commit()
             raise
 
@@ -166,15 +173,16 @@ class DataAcquisitionService:
             effective_timeout = timeout if timeout and timeout > 0 else None
             if effective_timeout is None:
                 from app.core.config import settings
+
                 effective_timeout = settings.akshare_call_timeout or None
 
             if effective_timeout:
                 try:
                     result = await asyncio.wait_for(coro, timeout=effective_timeout)
-                except asyncio.TimeoutError:
+                except TimeoutError as e:
                     raise TimeoutError(
                         f"akshare function {interface.name} timed out after {effective_timeout}s"
-                    )
+                    ) from e
             else:
                 result = await coro
 
@@ -278,16 +286,20 @@ class DataAcquisitionService:
             columns_defs.append(f"{safe_column_name(col)} {sql_type}")
 
         # Add ID, row_hash (for dedup), and timestamp columns
-        all_columns = ["id BIGINT AUTO_INCREMENT PRIMARY KEY"] + columns_defs + [
-            "`row_hash` CHAR(32) NOT NULL",
-            "created_at DATETIME DEFAULT CURRENT_TIMESTAMP",
-            "UNIQUE KEY `uq_row_hash` (`row_hash`)",
-        ]
+        all_columns = (
+            ["id BIGINT AUTO_INCREMENT PRIMARY KEY"]
+            + columns_defs
+            + [
+                "`row_hash` CHAR(32) NOT NULL",
+                "created_at DATETIME DEFAULT CURRENT_TIMESTAMP",
+                "UNIQUE KEY `uq_row_hash` (`row_hash`)",
+            ]
+        )
 
         quoted_name = safe_table_name(table_name)
         create_sql = f"""
             CREATE TABLE IF NOT EXISTS {quoted_name} (
-                {', '.join(all_columns)},
+                {", ".join(all_columns)},
                 INDEX idx_created_at (created_at)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         """
@@ -307,10 +319,17 @@ class DataAcquisitionService:
         # Prepare data for insertion (convert NaN/NaT to None for MySQL)
         data = data.where(pd.notna(data), None)
 
-        # Compute row_hash for deduplication (MD5 of all data columns)
+        # Compute row_hash for deduplication (MD5 of all data columns; non-crypto use)
         data_cols = list(data.columns)
-        data["row_hash"] = data[data_cols].astype(str).apply(
-            lambda row: hashlib.md5("|".join(row.values).encode()).hexdigest(), axis=1
+        data["row_hash"] = (
+            data[data_cols]
+            .astype(str)
+            .apply(
+                lambda row: hashlib.md5(
+                    "|".join(row.values).encode(), usedforsecurity=False
+                ).hexdigest(),
+                axis=1,
+            )
         )
         records = data.to_dict("records")
 
@@ -327,15 +346,15 @@ class DataAcquisitionService:
 
         # Adaptive batch size: larger batches for big datasets
         total_records = len(records)
-        batch_size = 5000 if total_records > 10000 else 2000
+        batch_size = BATCH_SIZE_LARGE if total_records > BATCH_SIZE_THRESHOLD else BATCH_SIZE_SMALL
         rows_inserted = 0
+        flush_interval = 20000  # Flush every N rows to avoid large transaction memory
 
         for i in range(0, total_records, batch_size):
             batch = records[i : i + batch_size]
             result = await db.execute(text(insert_sql), batch)
-            rows_inserted += result.rowcount
-            # Flush periodically to avoid large transaction memory
-            if i > 0 and i % 20000 == 0:
+            rows_inserted += get_rowcount(result)
+            if i > 0 and i % flush_interval == 0:
                 await db.flush()
                 logger.debug(
                     f"Insert progress: {i + len(batch)}/{total_records} "
@@ -358,16 +377,12 @@ class DataAcquisitionService:
         from sqlalchemy import select
 
         # Get existing metadata
-        result = await db.execute(
-            select(DataTable).where(DataTable.table_name == table_name)
-        )
+        result = await db.execute(select(DataTable).where(DataTable.table_name == table_name))
         table_meta = result.scalar_one_or_none()
 
         # Get current total row count
         quoted_name = safe_table_name(table_name)
-        count_result = await db.execute(
-            text(f"SELECT COUNT(*) FROM {quoted_name}")
-        )
+        count_result = await db.execute(text(f"SELECT COUNT(*) FROM {quoted_name}"))
         total_rows = count_result.scalar() or 0
 
         if table_meta:

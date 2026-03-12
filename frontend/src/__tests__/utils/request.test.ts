@@ -27,7 +27,7 @@ describe('Request Utils', () => {
   it('creates an axios instance', async () => {
     const { default: request } = await import('@/utils/request')
     expect(request).toBeDefined()
-    expect(request.defaults.baseURL).toBe('/api')
+    expect(request.defaults.baseURL).toBe('/api/v1')
     expect(request.defaults.timeout).toBe(30000)
   })
 

@@ -1,0 +1,25 @@
+# Dependabot: 定期依赖更新与安全扫描
+# https://docs.github.com/en/code-security/dependabot
+
+version: 2
+updates:
+  # Python 依赖
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  # npm 依赖 (frontend)
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3

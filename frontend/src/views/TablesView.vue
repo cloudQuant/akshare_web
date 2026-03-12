@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import { tablesApi } from '@/api/tables'
+import { getApiErrorMessage } from '@/utils/error'
 import type { DataTable } from '@/types'
 
 const router = useRouter()
@@ -28,10 +30,10 @@ async function loadTables() {
       page: currentPage.value,
       page_size: pageSize.value,
     })
-    tables.value = (data as any).items || []
-    total.value = (data as any).total || 0
+    tables.value = data.items ?? []
+    total.value = data.total ?? 0
   } catch (error) {
-    console.error('Failed to load tables:', error)
+    ElMessage.error(getApiErrorMessage(error))
   } finally {
     loading.value = false
   }
@@ -57,7 +59,9 @@ onMounted(() => {
       <template #header>
         <div class="header">
           <span>数据表</span>
-          <el-tag type="info">共 {{ total }} 个表</el-tag>
+          <el-tag type="info">
+            共 {{ total }} 个表
+          </el-tag>
         </div>
       </template>
 
@@ -81,23 +85,43 @@ onMounted(() => {
           style="width: 100%"
           stripe
         >
-          <el-table-column prop="table_name" label="表名" min-width="200" />
-          <el-table-column prop="row_count" label="行数" width="120">
+          <el-table-column
+            prop="table_name"
+            label="表名"
+            min-width="200"
+          />
+          <el-table-column
+            prop="row_count"
+            label="行数"
+            width="120"
+          >
             <template #default="{ row }">
               {{ row.row_count?.toLocaleString() || 0 }}
             </template>
           </el-table-column>
-          <el-table-column prop="created_at" label="创建时间" width="180">
+          <el-table-column
+            prop="created_at"
+            label="创建时间"
+            width="180"
+          >
             <template #default="{ row }">
               {{ new Date(row.created_at).toLocaleString() }}
             </template>
           </el-table-column>
-          <el-table-column prop="updated_at" label="更新时间" width="180">
+          <el-table-column
+            prop="updated_at"
+            label="更新时间"
+            width="180"
+          >
             <template #default="{ row }">
               {{ new Date(row.updated_at).toLocaleString() }}
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="120" fixed="right">
+          <el-table-column
+            label="操作"
+            width="120"
+            fixed="right"
+          >
             <template #default="{ row }">
               <el-button
                 type="primary"

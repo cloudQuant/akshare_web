@@ -4,7 +4,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { scriptsApi } from '@/api/scripts'
 import { dataApi } from '@/api/data'
-import type { DataScript } from '@/types'
+import { getApiErrorMessage } from '@/utils/error'
+import type { DataScript, Parameter } from '@/types'
 
 const route = useRoute()
 const router = useRouter()
@@ -20,8 +21,7 @@ async function loadScript() {
     const id = route.params.id as string
     script.value = await scriptsApi.getDetail(id)
   } catch (error) {
-    console.error('Failed to load script:', error)
-    ElMessage.error('加载接口详情失败')
+    ElMessage.error(getApiErrorMessage(error) || '加载接口详情失败')
   } finally {
     loading.value = false
   }
@@ -37,8 +37,7 @@ async function handleDownload() {
     ElMessage.success('下载任务已创建')
     router.push('/executions')
   } catch (error) {
-    console.error('Failed to download:', error)
-    ElMessage.error('创建下载任务失败')
+    ElMessage.error(getApiErrorMessage(error) || '创建下载任务失败')
   } finally {
     downloading.value = false
   }
@@ -55,55 +54,111 @@ onMounted(() => {
 
 <template>
   <div class="script-detail-view">
-    <el-page-header @back="goBack" title="返回">
+    <el-page-header
+      title="返回"
+      @back="goBack"
+    >
       <template #content>
         <span v-if="script">{{ script.script_name }}</span>
         <span v-else>加载中...</span>
       </template>
     </el-page-header>
 
-    <div v-loading="loading" class="content">
-      <el-card v-if="script" class="detail-card">
+    <div
+      v-loading="loading"
+      class="content"
+    >
+      <el-card
+        v-if="script"
+        class="detail-card"
+      >
         <template #title>
           <div class="card-title">
             <span>{{ script.script_name }}</span>
-            <el-tag size="small" type="success">{{ script.category }}</el-tag>
+            <el-tag
+              size="small"
+              type="success"
+            >
+              {{ script.category }}
+            </el-tag>
           </div>
         </template>
 
-        <el-descriptions :column="2" border>
+        <el-descriptions
+          :column="2"
+          border
+        >
           <el-descriptions-item label="接口名称">
             {{ script.script_name }}
           </el-descriptions-item>
           <el-descriptions-item label="类别">
-            <el-tag size="small">{{ script.category }}</el-tag>
+            <el-tag size="small">
+              {{ script.category }}
+            </el-tag>
           </el-descriptions-item>
-          <el-descriptions-item label="模块路径" :span="2">
+          <el-descriptions-item
+            label="模块路径"
+            :span="2"
+          >
             <code>{{ script.module_path }}</code>
           </el-descriptions-item>
-          <el-descriptions-item label="函数名" :span="2">
+          <el-descriptions-item
+            label="函数名"
+            :span="2"
+          >
             <code>{{ script.function_name }}</code>
           </el-descriptions-item>
-          <el-descriptions-item label="描述" :span="2">
+          <el-descriptions-item
+            label="描述"
+            :span="2"
+          >
             {{ script.description || '暂无描述' }}
           </el-descriptions-item>
         </el-descriptions>
 
         <!-- Parameters -->
-        <div v-if="script.parameters && Array.isArray(script.parameters) && script.parameters.length > 0" class="section">
+        <div
+          v-if="script.parameters && Array.isArray(script.parameters) && script.parameters.length > 0"
+          class="section"
+        >
           <h3>参数</h3>
-          <el-table :data="(script.parameters as any[])" style="width: 100%">
-            <el-table-column prop="name" label="参数名" width="150" />
-            <el-table-column prop="type" label="类型" width="100" />
-            <el-table-column label="必填" width="80">
+          <el-table
+            :data="(script.parameters as Parameter[])"
+            style="width: 100%"
+          >
+            <el-table-column
+              prop="name"
+              label="参数名"
+              width="150"
+            />
+            <el-table-column
+              prop="type"
+              label="类型"
+              width="100"
+            />
+            <el-table-column
+              label="必填"
+              width="80"
+            >
               <template #default="{ row }">
-                <el-tag :type="row.required ? 'danger' : 'info'" size="small">
+                <el-tag
+                  :type="row.required ? 'danger' : 'info'"
+                  size="small"
+                >
                   {{ row.required ? '是' : '否' }}
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="default_value" label="默认值" width="120" />
-            <el-table-column prop="description" label="说明" show-overflow-tooltip />
+            <el-table-column
+              prop="default_value"
+              label="默认值"
+              width="120"
+            />
+            <el-table-column
+              prop="description"
+              label="说明"
+              show-overflow-tooltip
+            />
           </el-table>
         </div>
 

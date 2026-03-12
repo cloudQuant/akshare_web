@@ -4,12 +4,11 @@ Comprehensive tests for helpers utility module.
 Covers table name generation, column cleaning, size/duration formatting, string truncation.
 """
 
-import pytest
 from app.utils.helpers import (
-    generate_table_name,
     clean_column_names,
-    format_size,
     format_duration,
+    format_size,
+    generate_table_name,
     truncate_string,
 )
 

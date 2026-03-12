@@ -4,19 +4,24 @@ Task execution API endpoints.
 Provides endpoints for viewing and managing task executions.
 """
 
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.dependencies import get_current_admin_user, get_current_user
+from app.api.schemas import APIResponse, ErrorResponse
+
+COMMON_RESPONSES: dict[int | str, dict[str, Any]] = {
+    401: {"model": ErrorResponse, "description": "Not authenticated"},
+    403: {"model": ErrorResponse, "description": "Insufficient permissions"},
+}
 from app.core.database import get_db
-from app.api.dependencies import get_current_user, get_current_admin_user
+from app.models.task import TaskExecution, TaskStatus
 from app.models.user import User
-from app.models.task import TaskStatus
 from app.services.execution_service import ExecutionService
-from app.api.schemas import APIResponse
 
 router = APIRouter()
 
@@ -41,7 +46,7 @@ class ExecutionStatsResponse(BaseModel):
     today_executions: int
 
 
-@router.get("/")
+@router.get("/", responses=COMMON_RESPONSES)
 async def get_executions(
     task_id: int | None = None,
     script_id: str | None = None,
@@ -81,7 +86,7 @@ async def get_executions(
             "total": total,
             "page": page,
             "page_size": page_size,
-        }
+        },
     )
 
 
@@ -95,11 +100,7 @@ async def get_execution_stats(
     """Get execution statistics."""
     service = ExecutionService(db)
     stats = await service.get_execution_stats(start_date=start_date, end_date=end_date)
-    return APIResponse(
-        success=True,
-        message="success",
-        data=stats
-    )
+    return APIResponse(success=True, message="success", data=stats)
 
 
 @router.get("/recent")
@@ -114,7 +115,7 @@ async def get_recent_executions(
     return APIResponse(
         success=True,
         message="success",
-        data=[_execution_to_dict(execution) for execution in executions]
+        data=[_execution_to_dict(execution) for execution in executions],
     )
 
 
@@ -129,7 +130,7 @@ async def get_running_executions(
     return APIResponse(
         success=True,
         message="success",
-        data=[_execution_to_dict(execution) for execution in executions]
+        data=[_execution_to_dict(execution) for execution in executions],
     )
 
 
@@ -145,11 +146,17 @@ async def get_failed_executions(
     return APIResponse(
         success=True,
         message="success",
-        data=[_execution_to_dict(execution) for execution in executions]
+        data=[_execution_to_dict(execution) for execution in executions],
     )
 
 
-@router.get("/{execution_id}")
+@router.get(
+    "/{execution_id}",
+    responses={
+        **COMMON_RESPONSES,
+        404: {"model": ErrorResponse, "description": "Execution not found"},
+    },
+)
 async def get_execution(
     execution_id: str,
     db: AsyncSession = Depends(get_db),
@@ -160,21 +167,21 @@ async def get_execution(
     execution = await service.get_by_execution_id(execution_id)
 
     if not execution:
-        from fastapi import HTTPException
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Execution not found")
 
-        raise HTTPException(status_code=404, detail="Execution not found")
-
-    return APIResponse(
-        success=True,
-        message="success",
-        data=_execution_to_dict(execution)
-    )
+    return APIResponse(success=True, message="success", data=_execution_to_dict(execution))
 
 
-@router.delete("/")
+@router.delete(
+    "/",
+    responses={
+        **COMMON_RESPONSES,
+        400: {"model": ErrorResponse, "description": "Must provide execution_ids or status"},
+    },
+)
 async def delete_executions(
     execution_ids: list[str] | None = None,
-    status: TaskStatus | None = None,
+    status_filter: TaskStatus | None = Query(None, alias="status"),
     current_admin: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ) -> APIResponse:
@@ -187,23 +194,19 @@ async def delete_executions(
 
     if execution_ids:
         count = await service.delete_executions_by_ids(execution_ids)
-    elif status:
-        count = await service.delete_executions_by_status(status)
+    elif status_filter is not None:
+        count = await service.delete_executions_by_status(status_filter)
     else:
-        from fastapi import HTTPException
-
         raise HTTPException(
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail="Must provide either execution_ids or status",
         )
 
     return APIResponse(
-        success=True,
-        message=f"Deleted {count} execution(s)",
-        data={"deleted_count": count}
+        success=True, message=f"Deleted {count} execution(s)", data={"deleted_count": count}
     )
 
 
-def _execution_to_dict(execution) -> dict[str, Any]:
+def _execution_to_dict(execution: TaskExecution) -> dict[str, Any]:
     """Convert execution model to dictionary."""
     return execution.to_dict()

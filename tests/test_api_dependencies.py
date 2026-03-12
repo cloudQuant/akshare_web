@@ -4,8 +4,6 @@ API dependencies tests.
 Tests for API dependency injection functions.
 """
 
-import pytest
-
 
 class TestAPIDependencies:
     """Test API dependency functions."""
@@ -36,8 +34,9 @@ class TestAPIDependencies:
 
     def test_get_db_exists(self):
         """Test get_db dependency exists."""
-        from app.api.dependencies import get_db
         import inspect
+
+        from app.api.dependencies import get_db
 
         assert inspect.isasyncgenfunction(get_db)
 
@@ -109,33 +108,33 @@ class TestAPISchemasComprehensive:
         """Test all schemas can be imported."""
         from app.api.schemas import (
             APIResponse,
-            ErrorResponse,
-            PaginatedParams,
-            PaginatedResponse,
-            LoginRequest,
-            RegisterRequest,
-            RefreshTokenRequest,
-            TokenResponse,
-            UserResponse,
-            UserListResponse,
-            UserUpdateRequest,
-            UserUpdateRoleRequest,
-            TaskCreateRequest,
-            TaskUpdateRequest,
-            TaskResponse,
-            TaskExecutionResponse,
-            DataScriptResponse,
-            DataScriptListResponse,
-            TableResponse,
-            TableSchemaResponse,
-            InterfaceResponse,
-            InterfaceListResponse,
-            InterfaceParameterSchema,
-            ParameterSchema,
             CategoryResponse,
             DataDownloadRequest,
             DataDownloadResponse,
+            DataScriptListResponse,
+            DataScriptResponse,
             DownloadProgressResponse,
+            ErrorResponse,
+            InterfaceListResponse,
+            InterfaceParameterSchema,
+            InterfaceResponse,
+            LoginRequest,
+            PaginatedParams,
+            PaginatedResponse,
+            ParameterSchema,
+            RefreshTokenRequest,
+            RegisterRequest,
+            TableResponse,
+            TableSchemaResponse,
+            TaskCreateRequest,
+            TaskExecutionResponse,
+            TaskResponse,
+            TaskUpdateRequest,
+            TokenResponse,
+            UserListResponse,
+            UserResponse,
+            UserUpdateRequest,
+            UserUpdateRoleRequest,
         )
 
         assert APIResponse is not None
@@ -175,7 +174,7 @@ class TestMainApp:
         """Test all expected routes are registered."""
         from app.main import app
 
-        routes = [r.path for r in app.routes if hasattr(r, 'path')]
+        routes = [r.path for r in app.routes if hasattr(r, "path")]
 
         expected_routes = [
             "/api/auth",
@@ -197,7 +196,7 @@ class TestMainApp:
 
         # Just check the app exists and has routes
         assert app is not None
-        assert len([r for r in app.routes if hasattr(r, 'path')]) > 0
+        assert len([r for r in app.routes if hasattr(r, "path")]) > 0
 
 
 class TestDatabaseModule:
@@ -223,7 +222,8 @@ class TestDatabaseModule:
 
     def test_check_db_connection_exists(self):
         """Test check_db_connection function exists."""
+        import inspect
+
         from app.core.database import check_db_connection
 
-        import inspect
         assert inspect.iscoroutinefunction(check_db_connection)

@@ -45,37 +45,72 @@
           style="width: 150px"
           @change="loadScripts"
         >
-          <el-option label="全部" value="" />
-          <el-option label="系统接口" value="system" />
-          <el-option label="自定义接口" value="custom" />
+          <el-option
+            label="全部"
+            value=""
+          />
+          <el-option
+            label="系统接口"
+            value="system"
+          />
+          <el-option
+            label="自定义接口"
+            value="custom"
+          />
         </el-select>
       </div>
 
       <!-- Scripts Table -->
       <el-table
-        :data="scripts"
         v-loading="loading"
+        :data="scripts"
         stripe
         style="width: 100%; margin-top: 20px"
       >
-        <el-table-column prop="script_id" label="接口ID" width="180" />
-        <el-table-column prop="script_name" label="名称" width="200" />
-        <el-table-column prop="category" label="类别" width="120">
+        <el-table-column
+          prop="script_id"
+          label="接口ID"
+          width="180"
+        />
+        <el-table-column
+          prop="script_name"
+          label="名称"
+          width="200"
+        />
+        <el-table-column
+          prop="category"
+          label="类别"
+          width="120"
+        >
           <template #default="{ row }">
             <el-tag :type="getCategoryType(row.category)">
               {{ row.category }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="description" label="描述" show-overflow-tooltip />
-        <el-table-column label="类型" width="100">
+        <el-table-column
+          prop="description"
+          label="描述"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          label="类型"
+          width="100"
+        >
           <template #default="{ row }">
-            <el-tag :type="row.is_custom ? 'success' : 'info'" size="small">
+            <el-tag
+              :type="row.is_custom ? 'success' : 'info'"
+              size="small"
+            >
               {{ row.is_custom ? '自定义' : '系统' }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="is_active" label="状态" width="80">
+        <el-table-column
+          prop="is_active"
+          label="状态"
+          width="80"
+        >
           <template #default="{ row }">
             <el-switch
               v-model="row.is_active"
@@ -83,7 +118,11 @@
             />
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="150" fixed="right">
+        <el-table-column
+          label="操作"
+          width="150"
+          fixed="right"
+        >
           <template #default="{ row }">
             <el-button
               v-if="row.is_custom"
@@ -103,7 +142,10 @@
             >
               删除
             </el-button>
-            <span v-if="!row.is_custom" class="text-muted">系统接口</span>
+            <span
+              v-if="!row.is_custom"
+              class="text-muted"
+            >系统接口</span>
           </template>
         </el-table-column>
       </el-table>
@@ -134,7 +176,10 @@
         :rules="formRules"
         label-width="120px"
       >
-        <el-form-item label="接口ID" prop="script_id">
+        <el-form-item
+          label="接口ID"
+          prop="script_id"
+        >
           <el-input
             v-model="formData.script_id"
             placeholder="如: custom_stock_data"
@@ -143,14 +188,20 @@
           <span class="form-tip">唯一标识，创建后不可修改</span>
         </el-form-item>
 
-        <el-form-item label="接口名称" prop="script_name">
+        <el-form-item
+          label="接口名称"
+          prop="script_name"
+        >
           <el-input
             v-model="formData.script_name"
             placeholder="如: 自定义股票数据"
           />
         </el-form-item>
 
-        <el-form-item label="类别" prop="category">
+        <el-form-item
+          label="类别"
+          prop="category"
+        >
           <el-select
             v-model="formData.category"
             placeholder="选择类别"
@@ -165,7 +216,10 @@
           </el-select>
         </el-form-item>
 
-        <el-form-item label="子类别" prop="sub_category">
+        <el-form-item
+          label="子类别"
+          prop="sub_category"
+        >
           <el-input
             v-model="formData.sub_category"
             placeholder="如: daily, weekly, monthly"
@@ -226,15 +280,21 @@
             v-model="parametersJson"
             type="textarea"
             :rows="4"
-            placeholder='{"symbol": {"type": "string", "required": true}}'
+            placeholder="{&quot;symbol&quot;: {&quot;type&quot;: &quot;string&quot;, &quot;required&quot;: true}}"
           />
           <span class="form-tip">JSON格式的参数定义</span>
         </el-form-item>
       </el-form>
 
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSubmit" :loading="submitting">
+        <el-button @click="dialogVisible = false">
+          取消
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="submitting"
+          @click="handleSubmit"
+        >
           {{ isEditMode ? '保存' : '创建' }}
         </el-button>
       </template>
@@ -243,11 +303,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { Plus, Search } from '@element-plus/icons-vue'
 import { scriptApi } from '@/api/scripts'
 import type { DataScript } from '@/types'
+import { getApiErrorMessage } from '@/utils/error'
 
 // Data
 const scripts = ref<DataScript[]>([])
@@ -389,8 +450,8 @@ const handleDelete = (row: DataScript) => {
       await scriptApi.delete(row.script_id)
       ElMessage.success('删除成功')
       loadScripts()
-    } catch (error: any) {
-      ElMessage.error(error.response?.data?.detail || '删除失败')
+    } catch (error: unknown) {
+      ElMessage.error(getApiErrorMessage(error, '删除失败'))
     }
   })
 }
@@ -399,7 +460,7 @@ const handleToggleActive = async (row: DataScript) => {
   try {
     await scriptApi.toggle(row.script_id)
     ElMessage.success(`接口已${row.is_active ? '启用' : '禁用'}`)
-  } catch (error) {
+  } catch {
     // Revert on error
     row.is_active = !row.is_active
     ElMessage.error('操作失败')
@@ -455,8 +516,8 @@ const handleSubmit = async () => {
       }
       dialogVisible.value = false
       loadScripts()
-    } catch (error: any) {
-      ElMessage.error(error.response?.data?.detail || '操作失败')
+    } catch (error: unknown) {
+      ElMessage.error(getApiErrorMessage(error, '操作失败'))
     } finally {
       submitting.value = false
     }

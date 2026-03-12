@@ -3,19 +3,18 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import Integer, and_, case, delete, func, select, text, update
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
-
-from app.models.task import TaskExecution, TaskStatus, TriggeredBy, ScheduledTask
-
 from loguru import logger
+from sqlalchemy import and_, case, delete, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.task import TaskExecution, TaskStatus, TriggeredBy
+from app.utils.db_result import get_rowcount
 
 
 class ExecutionService:
     """执行监控服务"""
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
     async def get_by_execution_id(self, execution_id: str) -> TaskExecution | None:
@@ -67,6 +66,39 @@ class ExecutionService:
         await self.db.refresh(execution)
         return execution
 
+    def _apply_execution_updates(
+        self,
+        execution: TaskExecution,
+        status: TaskStatus | None,
+        start_time: datetime | None,
+        end_time: datetime | None,
+        result: dict | None,
+        error_message: str | None,
+        error_trace: str | None,
+        rows_before: int | None,
+        rows_after: int | None,
+    ) -> None:
+        """Apply update fields to execution model."""
+        if status:
+            execution.status = status
+        if start_time:
+            execution.start_time = start_time
+        if end_time:
+            execution.end_time = end_time
+            effective_start = start_time or execution.start_time
+            if effective_start:
+                execution.duration = (end_time - effective_start).total_seconds()
+        if result is not None:
+            execution.result = result
+        if error_message:
+            execution.error_message = error_message
+        if error_trace:
+            execution.error_trace = error_trace
+        if rows_before is not None:
+            execution.rows_before = rows_before
+        if rows_after is not None:
+            execution.rows_after = rows_after
+
     async def update_execution(
         self,
         execution_id: str,
@@ -101,26 +133,17 @@ class ExecutionService:
             logger.warning(f"Execution not found for update: {execution_id}")
             return False
 
-        if status:
-            execution.status = status
-        if start_time:
-            execution.start_time = start_time
-        if end_time:
-            execution.end_time = end_time
-            # 计算执行时长
-            effective_start = start_time or execution.start_time
-            if effective_start:
-                execution.duration = (end_time - effective_start).total_seconds()
-        if result is not None:
-            execution.result = result
-        if error_message:
-            execution.error_message = error_message
-        if error_trace:
-            execution.error_trace = error_trace
-        if rows_before is not None:
-            execution.rows_before = rows_before
-        if rows_after is not None:
-            execution.rows_after = rows_after
+        self._apply_execution_updates(
+            execution,
+            status,
+            start_time,
+            end_time,
+            result,
+            error_message,
+            error_trace,
+            rows_before,
+            rows_after,
+        )
 
         try:
             await self.db.commit()
@@ -204,17 +227,15 @@ class ExecutionService:
         # Single query for all stats to reduce database round-trips
         stats_query = select(
             func.count(TaskExecution.id).label("total_count"),
-            func.count(
-                case((TaskExecution.status == TaskStatus.COMPLETED, 1))
-            ).label("success_count"),
+            func.count(case((TaskExecution.status == TaskStatus.COMPLETED, 1))).label(
+                "success_count"
+            ),
             func.avg(
                 case(
                     (TaskExecution.status == TaskStatus.COMPLETED, TaskExecution.duration),
                 )
             ).label("avg_duration"),
-            func.count(
-                case((TaskExecution.start_time >= today_start, 1))
-            ).label("today_count"),
+            func.count(case((TaskExecution.start_time >= today_start, 1))).label("today_count"),
         ).where(
             and_(
                 TaskExecution.start_time >= start_date,
@@ -242,17 +263,17 @@ class ExecutionService:
 
     async def get_recent_executions(self, limit: int = 50) -> list[TaskExecution]:
         """获取最近的执行记录"""
-        query = select(TaskExecution).order_by(
-            TaskExecution.start_time.desc()
-        ).limit(limit)
+        query = select(TaskExecution).order_by(TaskExecution.start_time.desc()).limit(limit)
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
     async def get_running_executions(self) -> list[TaskExecution]:
         """获取正在执行的任务"""
-        query = select(TaskExecution).where(
-            TaskExecution.status == TaskStatus.RUNNING
-        ).order_by(TaskExecution.start_time.desc())
+        query = (
+            select(TaskExecution)
+            .where(TaskExecution.status == TaskStatus.RUNNING)
+            .order_by(TaskExecution.start_time.desc())
+        )
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
@@ -264,21 +285,22 @@ class ExecutionService:
             delete(TaskExecution).where(TaskExecution.execution_id.in_(execution_ids))
         )
         await self.db.commit()
-        return result.rowcount
+        return get_rowcount(result)
 
     async def delete_executions_by_status(self, status: TaskStatus) -> int:
         """按状态删除执行记录"""
-        result = await self.db.execute(
-            delete(TaskExecution).where(TaskExecution.status == status)
-        )
+        result = await self.db.execute(delete(TaskExecution).where(TaskExecution.status == status))
         await self.db.commit()
-        return result.rowcount
+        return get_rowcount(result)
 
     async def get_failed_executions(self, limit: int = 20) -> list[TaskExecution]:
         """获取失败的执行记录"""
-        query = select(TaskExecution).where(
-            TaskExecution.status == TaskStatus.FAILED
-        ).order_by(TaskExecution.start_time.desc()).limit(limit)
+        query = (
+            select(TaskExecution)
+            .where(TaskExecution.status == TaskStatus.FAILED)
+            .order_by(TaskExecution.start_time.desc())
+            .limit(limit)
+        )
         result = await self.db.execute(query)
         return list(result.scalars().all())
 

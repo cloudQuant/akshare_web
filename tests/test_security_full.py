@@ -4,9 +4,7 @@ Security module full coverage tests.
 Tests for app.core.security to achieve 100% coverage.
 """
 
-import pytest
-from datetime import timedelta, UTC, datetime
-from unittest.mock import patch
+from datetime import timedelta
 
 
 class TestHashPassword:
@@ -71,10 +69,7 @@ class TestCreateAccessToken:
         """Test creating access token with custom expiry."""
         from app.core.security import create_access_token
 
-        token = create_access_token(
-            {"sub": "user123"},
-            expires_delta=timedelta(hours=1)
-        )
+        token = create_access_token({"sub": "user123"}, expires_delta=timedelta(hours=1))
 
         assert token is not None
         assert isinstance(token, str)
@@ -96,10 +91,7 @@ class TestCreateRefreshToken:
         """Test creating refresh token with custom expiry."""
         from app.core.security import create_refresh_token
 
-        token = create_refresh_token(
-            {"sub": "user123"},
-            expires_delta=timedelta(days=30)
-        )
+        token = create_refresh_token({"sub": "user123"}, expires_delta=timedelta(days=30))
 
         assert token is not None
         assert isinstance(token, str)
@@ -110,7 +102,7 @@ class TestDecodeToken:
 
     def test_decode_token_valid(self):
         """Test decoding a valid token."""
-        from app.core.security import decode_token, create_access_token
+        from app.core.security import create_access_token, decode_token
 
         token = create_access_token({"sub": "user123"})
         payload = decode_token(token)
@@ -128,13 +120,10 @@ class TestDecodeToken:
 
     def test_decode_token_expired(self):
         """Test decoding an expired token."""
-        from app.core.security import decode_token, create_access_token
+        from app.core.security import create_access_token, decode_token
 
         # Create token that's already expired
-        token = create_access_token(
-            {"sub": "user123"},
-            expires_delta=timedelta(seconds=-1)
-        )
+        token = create_access_token({"sub": "user123"}, expires_delta=timedelta(seconds=-1))
 
         payload = decode_token(token)
 
@@ -146,7 +135,7 @@ class TestVerifyToken:
 
     def test_verify_access_token_valid(self):
         """Test verifying a valid access token."""
-        from app.core.security import verify_token, create_access_token
+        from app.core.security import create_access_token, verify_token
 
         token = create_access_token({"sub": "user123"})
         payload = verify_token(token, "access")
@@ -157,7 +146,7 @@ class TestVerifyToken:
 
     def test_verify_refresh_token_valid(self):
         """Test verifying a valid refresh token."""
-        from app.core.security import verify_token, create_refresh_token
+        from app.core.security import create_refresh_token, verify_token
 
         token = create_refresh_token({"sub": "user123"})
         payload = verify_token(token, "refresh")
@@ -168,7 +157,7 @@ class TestVerifyToken:
 
     def test_verify_token_wrong_type(self):
         """Test verifying token with wrong type."""
-        from app.core.security import verify_token, create_access_token
+        from app.core.security import create_access_token, verify_token
 
         token = create_access_token({"sub": "user123"})
         payload = verify_token(token, "refresh")
@@ -183,4 +172,3 @@ class TestVerifyToken:
         payload = verify_token("invalid_token", "access")
 
         assert payload is None
-

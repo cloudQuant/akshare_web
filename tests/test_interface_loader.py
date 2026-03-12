@@ -4,8 +4,8 @@ Interface loader service tests.
 Tests for the akshare interface discovery and loading service.
 """
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+import contextlib
+from unittest.mock import AsyncMock, patch
 
 
 class TestInterfaceLoader:
@@ -21,7 +21,7 @@ class TestInterfaceLoader:
         """Test CATEGORY_MAPPING exists."""
         from app.services.interface_loader import InterfaceLoader
 
-        assert hasattr(InterfaceLoader, 'CATEGORY_MAPPING')
+        assert hasattr(InterfaceLoader, "CATEGORY_MAPPING")
         assert isinstance(InterfaceLoader.CATEGORY_MAPPING, dict)
 
     def test_category_mapping_has_stock(self):
@@ -43,7 +43,7 @@ class TestInterfaceLoader:
         from app.services.interface_loader import InterfaceLoader
 
         loader = InterfaceLoader()
-        assert hasattr(loader, 'load_from_akshare')
+        assert hasattr(loader, "load_from_akshare")
         assert callable(loader.load_from_akshare)
 
     def test_ensure_categories_method_exists(self):
@@ -51,7 +51,7 @@ class TestInterfaceLoader:
         from app.services.interface_loader import InterfaceLoader
 
         loader = InterfaceLoader()
-        assert hasattr(loader, '_ensure_categories')
+        assert hasattr(loader, "_ensure_categories")
         assert callable(loader._ensure_categories)
 
     def test_discover_akshare_functions_method_exists(self):
@@ -59,7 +59,7 @@ class TestInterfaceLoader:
         from app.services.interface_loader import InterfaceLoader
 
         loader = InterfaceLoader()
-        assert hasattr(loader, '_discover_akshare_functions')
+        assert hasattr(loader, "_discover_akshare_functions")
         assert callable(loader._discover_akshare_functions)
 
     def test_discover_akshare_functions_returns_list(self):
@@ -91,16 +91,15 @@ class TestInterfaceLoader:
         loader = InterfaceLoader()
 
         # Check that the method exists and works
-        with patch('app.services.interface_loader.async_session_maker') as mock_session:
+        with patch("app.services.interface_loader.async_session_maker") as mock_session:
             mock_db = AsyncMock()
             mock_session().__aenter__.return_value = mock_db
 
             # Call the method
             import asyncio
-            try:
+
+            with contextlib.suppress(Exception):  # May fail without actual database
                 asyncio.run(loader._ensure_categories(mock_db))
-            except Exception:
-                pass  # May fail without actual database
 
     def test_discover_functions_filters_akshare(self):
         """Test function discovery filters akshare module."""
@@ -131,10 +130,10 @@ class TestInterfaceLoaderIntegration:
         loader = InterfaceLoader()
 
         expected_methods = [
-            'load_from_akshare',
-            '_ensure_categories',
-            '_discover_akshare_functions',
-            '_load_interface',
+            "load_from_akshare",
+            "_ensure_categories",
+            "_discover_akshare_functions",
+            "_load_interface",
         ]
 
         for method in expected_methods:
@@ -145,11 +144,17 @@ class TestInterfaceLoaderIntegration:
         from app.services.interface_loader import InterfaceLoader
 
         valid_categories = [
-            "stock", "fund", "futures", "index", "bond",
-            "forex", "economic", "macro"
+            "stock",
+            "fund",
+            "futures",
+            "index",
+            "bond",
+            "forex",
+            "economic",
+            "macro",
         ]
 
-        for func_name, category in InterfaceLoader.CATEGORY_MAPPING.items():
+        for _func_name, category in InterfaceLoader.CATEGORY_MAPPING.items():
             assert category in valid_categories
 
 
@@ -185,7 +190,7 @@ class TestDataInterfaceModels:
         from app.models.interface import ParameterType
 
         # Should have common parameter types
-        assert hasattr(ParameterType, '__members__')
+        assert hasattr(ParameterType, "__members__")
         assert len(ParameterType.__members__) > 0
 
 
@@ -203,12 +208,12 @@ class TestAkshareIntegration:
         import akshare as ak
 
         # Should have stock functions
-        assert hasattr(ak, 'stock_zh_a_hist') or hasattr(ak, 'stock')
+        assert hasattr(ak, "stock_zh_a_hist") or hasattr(ak, "stock")
 
     def test_akshare_function_callable(self):
         """Test akshare functions are callable."""
         import akshare as ak
 
-        if hasattr(ak, 'stock_zh_a_hist'):
-            func = getattr(ak, 'stock_zh_a_hist')
+        if hasattr(ak, "stock_zh_a_hist"):
+            func = ak.stock_zh_a_hist
             assert callable(func)

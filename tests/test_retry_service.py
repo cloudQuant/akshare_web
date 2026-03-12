@@ -4,12 +4,12 @@ Retry service tests.
 Tests for the retry mechanism with exponential backoff.
 """
 
-import pytest
 import asyncio
-from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock, Mock
+from unittest.mock import AsyncMock, Mock
 
-from app.models.task import ScheduledTask, TaskExecution, TaskStatus
+import pytest
+
+from app.models.task import TaskExecution, TaskStatus
 
 
 class TestRetryService:
@@ -112,7 +112,6 @@ class TestShouldRetry:
     async def test_should_retry_with_retry_enabled(self):
         """Test should retry when retry is enabled."""
         from app.services.retry_service import RetryService
-        from app.models.task import TaskExecution, TaskStatus
 
         mock_db = AsyncMock()
         service = RetryService(mock_db)
@@ -134,7 +133,6 @@ class TestShouldRetry:
     async def test_should_not_retry_when_disabled(self):
         """Test should not retry when retry is disabled."""
         from app.services.retry_service import RetryService
-        from app.models.task import TaskExecution, TaskStatus
 
         mock_db = AsyncMock()
         service = RetryService(mock_db)
@@ -154,7 +152,6 @@ class TestShouldRetry:
     async def test_should_not_retry_when_max_retries_exceeded(self):
         """Test should not retry when max retries exceeded."""
         from app.services.retry_service import RetryService
-        from app.models.task import TaskExecution, TaskStatus
 
         mock_db = AsyncMock()
         service = RetryService(mock_db)
@@ -174,7 +171,6 @@ class TestShouldRetry:
     async def test_should_not_retry_when_not_failed(self):
         """Test should not retry when execution is not failed."""
         from app.services.retry_service import RetryService
-        from app.models.task import TaskExecution, TaskStatus
 
         mock_db = AsyncMock()
         service = RetryService(mock_db)
@@ -194,7 +190,6 @@ class TestShouldRetry:
     async def test_should_retry_boundary_case(self):
         """Test boundary case where retry_count equals max_retries."""
         from app.services.retry_service import RetryService
-        from app.models.task import TaskExecution, TaskStatus
 
         mock_db = AsyncMock()
         service = RetryService(mock_db)
@@ -214,7 +209,6 @@ class TestShouldRetry:
     async def test_should_retry_one_less_than_max(self):
         """Test retry when one less than max retries."""
         from app.services.retry_service import RetryService
-        from app.models.task import TaskExecution, TaskStatus
 
         mock_db = AsyncMock()
         service = RetryService(mock_db)
@@ -259,7 +253,7 @@ class TestCancelPendingRetries:
         async def dummy_task():
             try:
                 await asyncio.wait_for(stop_event.wait(), timeout=10)
-            except (asyncio.TimeoutError, asyncio.CancelledError):
+            except (TimeoutError, asyncio.CancelledError):
                 raise
 
         task = asyncio.create_task(dummy_task())
@@ -278,7 +272,7 @@ class TestCancelPendingRetries:
                 if not task.done():
                     task.cancel()
                     await asyncio.wait_for(task, timeout=0.1)
-            except:
+            except (Exception, asyncio.CancelledError):
                 pass
 
 
@@ -312,7 +306,7 @@ class TestGetRetryStatus:
             nonlocal task_complete
             try:
                 await asyncio.wait_for(stop_event.wait(), timeout=10)
-            except (asyncio.TimeoutError, asyncio.CancelledError):
+            except (TimeoutError, asyncio.CancelledError):
                 raise
             finally:
                 task_complete = True
@@ -333,7 +327,7 @@ class TestGetRetryStatus:
             try:
                 task.cancel()
                 await asyncio.wait_for(task, timeout=0.1)
-            except:
+            except Exception:
                 pass
 
 
@@ -365,7 +359,7 @@ class TestGetAllPendingRetries:
         async def dummy_task():
             try:
                 await asyncio.wait_for(stop_event.wait(), timeout=1)
-            except (asyncio.TimeoutError, asyncio.CancelledError):
+            except (TimeoutError, asyncio.CancelledError):
                 raise
 
         task1 = asyncio.create_task(dummy_task())
@@ -390,7 +384,7 @@ class TestGetAllPendingRetries:
                 task1.cancel()
                 task2.cancel()
                 await asyncio.gather(task1, task2, return_exceptions=True)
-            except:
+            except (Exception, asyncio.CancelledError):
                 pass
 
 
@@ -437,8 +431,8 @@ class TestRetryServiceIntegration:
         """Test all service constants."""
         from app.services.retry_service import RetryService
 
-        assert hasattr(RetryService, 'BASE_RETRY_DELAY')
-        assert hasattr(RetryService, 'MAX_RETRY_DELAY')
+        assert hasattr(RetryService, "BASE_RETRY_DELAY")
+        assert hasattr(RetryService, "MAX_RETRY_DELAY")
         assert RetryService.BASE_RETRY_DELAY < RetryService.MAX_RETRY_DELAY
 
     def test_service_methods_exist(self):
@@ -449,11 +443,11 @@ class TestRetryServiceIntegration:
         service = RetryService(mock_db)
 
         # Check all methods exist
-        assert hasattr(service, 'should_retry')
-        assert hasattr(service, 'calculate_retry_delay')
-        assert hasattr(service, 'schedule_retry')
-        assert hasattr(service, 'execute_retry')
-        assert hasattr(service, 'cancel_pending_retries')
-        assert hasattr(service, 'get_retry_status')
-        assert hasattr(service, 'get_all_pending_retries')
-        assert hasattr(service, 'cleanup_completed_retries')
+        assert hasattr(service, "should_retry")
+        assert hasattr(service, "calculate_retry_delay")
+        assert hasattr(service, "schedule_retry")
+        assert hasattr(service, "execute_retry")
+        assert hasattr(service, "cancel_pending_retries")
+        assert hasattr(service, "get_retry_status")
+        assert hasattr(service, "get_all_pending_retries")
+        assert hasattr(service, "cleanup_completed_retries")

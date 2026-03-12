@@ -4,24 +4,26 @@ Data acquisition API routes.
 Provides endpoints for manual data download and progress tracking.
 """
 
+import asyncio
+import uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
-from app.api.dependencies import get_current_user, get_db
+from app.api.dependencies import CurrentUser, get_db
 from app.api.schemas import (
     APIResponse,
     DataDownloadRequest,
     DataDownloadResponse,
     DownloadProgressResponse,
-    TaskExecutionResponse,
 )
 from app.models.interface import DataInterface
-from app.models.task import ScheduledTask, TaskExecution, TaskStatus
+from app.models.task import TaskExecution, TaskStatus
 from app.services.data_acquisition import DataAcquisitionService
+from app.utils.constants import ESTIMATED_DOWNLOAD_SECONDS
 
 router = APIRouter()
 
@@ -29,22 +31,25 @@ router = APIRouter()
 data_service = DataAcquisitionService()
 
 
-def _log_task_exception(task: "asyncio.Task") -> None:
+def _log_task_exception(task: asyncio.Task) -> None:
     """Log unhandled exceptions from background asyncio tasks."""
     if task.cancelled():
         return
     exc = task.exception()
     if exc is not None:
-        from loguru import logger
-        logger.error(f"Unhandled exception in background task: {type(exc).__name__}: {exc}")
+        logger.error(
+            "Unhandled exception in background task: %s: %s",
+            type(exc).__name__,
+            exc,
+        )
 
 
 @router.post("/download", status_code=status.HTTP_202_ACCEPTED)
 async def trigger_download(
     request: DataDownloadRequest,
-    current_user = Depends(get_current_user),
+    current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
-):
+) -> DataDownloadResponse:
     """
     Trigger manual data download.
 
@@ -53,10 +58,7 @@ async def trigger_download(
     The actual download runs as a background task.
     """
     # Get interface
-    result = await db.execute(
-        select(DataInterface)
-        .where(DataInterface.id == request.interface_id)
-    )
+    result = await db.execute(select(DataInterface).where(DataInterface.id == request.interface_id))
     iface = result.scalar_one_or_none()
 
     if iface is None:
@@ -72,7 +74,6 @@ async def trigger_download(
         )
 
     # Create task execution record
-    import uuid
     execution = TaskExecution(
         execution_id=f"dl_{uuid.uuid4().hex[:12]}",
         task_id=None,  # Manual download has no parent task
@@ -92,11 +93,9 @@ async def trigger_download(
     params = request.parameters
 
     # Launch download in the background with its own db session
-    import asyncio
-    from app.core.database import async_session_maker
-
-    async def _bg_download():
+    async def _bg_download() -> None:
         from app.core.database import async_session_maker as _sm
+
         async with _sm() as bg_db:
             try:
                 await data_service.execute_download(
@@ -106,8 +105,11 @@ async def trigger_download(
                     db=bg_db,
                 )
             except Exception as e:
-                from loguru import logger
-                logger.error(f"Background download failed for execution {exec_id}: {e}")
+                logger.error(
+                    "Background download failed for execution %s: %s",
+                    exec_id,
+                    e,
+                )
 
     bg = asyncio.create_task(_bg_download())
     bg.add_done_callback(_log_task_exception)
@@ -119,20 +121,20 @@ async def trigger_download(
     )
 
 
-@router.get("/download/{execution_id}/status", )
+@router.get(
+    "/download/{execution_id}/status",
+)
 async def get_download_progress(
     execution_id: int,
-    current_user = Depends(get_current_user),
+    current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
-):
+) -> DownloadProgressResponse:
     """
     Get download progress.
 
     Returns current status and progress of data download.
     """
-    result = await db.execute(
-        select(TaskExecution).where(TaskExecution.id == execution_id)
-    )
+    result = await db.execute(select(TaskExecution).where(TaskExecution.id == execution_id))
     execution = result.scalar_one_or_none()
 
     if execution is None:
@@ -161,8 +163,7 @@ async def get_download_progress(
     # Estimate completion (rough estimate for running tasks)
     estimated_completion = None
     if execution.status == TaskStatus.RUNNING and execution.start_time:
-        # Assume 30 second average duration
-        estimated_completion = execution.start_time.timestamp() + 30
+        estimated_completion = execution.start_time.timestamp() + ESTIMATED_DOWNLOAD_SECONDS
 
     return DownloadProgressResponse(
         execution_id=execution.id,
@@ -171,25 +172,25 @@ async def get_download_progress(
         message=execution.error_message if execution.status == TaskStatus.FAILED else None,
         rows_processed=execution.rows_after,
         started_at=execution.start_time,
-        estimated_completion=datetime.fromtimestamp(estimated_completion, UTC) if estimated_completion else None,
+        estimated_completion=datetime.fromtimestamp(estimated_completion, UTC)
+        if estimated_completion
+        else None,
     )
 
 
 @router.get("/download/{execution_id}/result")
 async def get_download_result(
     execution_id: int,
-    current_user = Depends(get_current_user),
+    current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
-):
+) -> APIResponse:
     """
     Get download result data.
 
     Returns the actual data from completed download.
     For successful downloads, returns the data rows.
     """
-    result = await db.execute(
-        select(TaskExecution).where(TaskExecution.id == execution_id)
-    )
+    result = await db.execute(select(TaskExecution).where(TaskExecution.id == execution_id))
     execution = result.scalar_one_or_none()
 
     if execution is None:

@@ -10,12 +10,12 @@ from sqlalchemy.engine import Connection
 # Ensure project root is on sys.path so 'app' package can be imported
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import app.models  # noqa: F401 — import all models so autogenerate detects them
 from alembic import context
 
 # Import models and settings
 from app.core.config import settings
 from app.core.database import Base
-import app.models  # noqa: F401 — import all models so autogenerate detects them
 
 # Alembic config object
 config = context.config

@@ -1,6 +1,7 @@
 import request from '@/utils/request'
 import type {
   DataTable,
+  TableDataResponse,
   TableSchema,
   PaginationParams,
   PaginatedResponse,
@@ -24,8 +25,11 @@ export const tablesApi = {
     })
   },
 
-  // Get table data
-  getData(tableId: string | number, page: number = 1, pageSize: number = 100): Promise<any> {
+  getData(
+    tableId: string | number,
+    page: number = 1,
+    pageSize: number = 100
+  ): Promise<TableDataResponse> {
     return request({
       url: `/tables/${tableId}/data`,
       method: 'GET',

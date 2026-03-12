@@ -4,11 +4,10 @@ Tests endpoint functions directly rather than through HTTP client.
 """
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.security import create_refresh_token, hash_password
 from app.models.user import User, UserRole
-from app.core.security import hash_password, create_access_token, create_refresh_token
 
 
 class TestRegisterDirect:
@@ -27,7 +26,7 @@ class TestRegisterDirect:
         )
 
         # Call the original function directly (unwrap rate_limit)
-        original_func = getattr(register, '__original_func__', register)
+        original_func = getattr(register, "__original_func__", register)
         result = await original_func(request=request, db=test_db)
 
         assert result.success is True
@@ -38,9 +37,10 @@ class TestRegisterDirect:
     @pytest.mark.asyncio
     async def test_register_duplicate_email_direct(self, test_db: AsyncSession):
         """Test register with duplicate email."""
+        from fastapi import HTTPException
+
         from app.api.auth import register
         from app.api.schemas import RegisterRequest
-        from fastapi import HTTPException
 
         # Create user first
         user = User(
@@ -59,7 +59,7 @@ class TestRegisterDirect:
             password_confirm="Password123!",
         )
 
-        original_func = getattr(register, '__original_func__', register)
+        original_func = getattr(register, "__original_func__", register)
         with pytest.raises(HTTPException) as exc_info:
             await original_func(request=request, db=test_db)
         assert exc_info.value.status_code == 400
@@ -68,9 +68,10 @@ class TestRegisterDirect:
     @pytest.mark.asyncio
     async def test_register_password_mismatch_direct(self, test_db: AsyncSession):
         """Test register with mismatched passwords."""
+        from fastapi import HTTPException
+
         from app.api.auth import register
         from app.api.schemas import RegisterRequest
-        from fastapi import HTTPException
 
         request = RegisterRequest(
             email="mismatch@example.com",
@@ -78,7 +79,7 @@ class TestRegisterDirect:
             password_confirm="DifferentPass123!",
         )
 
-        original_func = getattr(register, '__original_func__', register)
+        original_func = getattr(register, "__original_func__", register)
         with pytest.raises(HTTPException) as exc_info:
             await original_func(request=request, db=test_db)
         assert exc_info.value.status_code == 400
@@ -107,7 +108,7 @@ class TestRegisterDirect:
             password_confirm="Password123!",
         )
 
-        original_func = getattr(register, '__original_func__', register)
+        original_func = getattr(register, "__original_func__", register)
         result = await original_func(request=request, db=test_db)
         assert result.success is True
 
@@ -137,7 +138,7 @@ class TestLoginDirect:
             password="Password123!",
         )
 
-        original_func = getattr(login, '__original_func__', login)
+        original_func = getattr(login, "__original_func__", login)
         result = await original_func(request=request, db=test_db)
 
         assert result.success is True
@@ -147,9 +148,10 @@ class TestLoginDirect:
     @pytest.mark.asyncio
     async def test_login_wrong_password_direct(self, test_db: AsyncSession):
         """Test login with wrong password."""
+        from fastapi import HTTPException
+
         from app.api.auth import login
         from app.api.schemas import LoginRequest
-        from fastapi import HTTPException
 
         user = User(
             username="wrongpw",
@@ -166,7 +168,7 @@ class TestLoginDirect:
             password="WrongPass123!",
         )
 
-        original_func = getattr(login, '__original_func__', login)
+        original_func = getattr(login, "__original_func__", login)
         with pytest.raises(HTTPException) as exc_info:
             await original_func(request=request, db=test_db)
         assert exc_info.value.status_code == 401
@@ -174,16 +176,17 @@ class TestLoginDirect:
     @pytest.mark.asyncio
     async def test_login_nonexistent_user_direct(self, test_db: AsyncSession):
         """Test login with non-existent user."""
+        from fastapi import HTTPException
+
         from app.api.auth import login
         from app.api.schemas import LoginRequest
-        from fastapi import HTTPException
 
         request = LoginRequest(
             email="nonexistent@example.com",
             password="Password123!",
         )
 
-        original_func = getattr(login, '__original_func__', login)
+        original_func = getattr(login, "__original_func__", login)
         with pytest.raises(HTTPException) as exc_info:
             await original_func(request=request, db=test_db)
         assert exc_info.value.status_code == 401
@@ -191,9 +194,10 @@ class TestLoginDirect:
     @pytest.mark.asyncio
     async def test_login_inactive_user_direct(self, test_db: AsyncSession):
         """Test login with inactive user."""
+        from fastapi import HTTPException
+
         from app.api.auth import login
         from app.api.schemas import LoginRequest
-        from fastapi import HTTPException
 
         user = User(
             username="inactive",
@@ -210,7 +214,7 @@ class TestLoginDirect:
             password="Password123!",
         )
 
-        original_func = getattr(login, '__original_func__', login)
+        original_func = getattr(login, "__original_func__", login)
         with pytest.raises(HTTPException) as exc_info:
             await original_func(request=request, db=test_db)
         assert exc_info.value.status_code == 403
@@ -249,9 +253,10 @@ class TestRefreshTokenDirect:
     @pytest.mark.asyncio
     async def test_refresh_invalid_token_direct(self, test_db: AsyncSession):
         """Test refresh with invalid token."""
+        from fastapi import HTTPException
+
         from app.api.auth import refresh_token
         from app.api.schemas import RefreshTokenRequest
-        from fastapi import HTTPException
 
         request = RefreshTokenRequest(refresh_token="invalid_token_xyz")
 
@@ -262,9 +267,10 @@ class TestRefreshTokenDirect:
     @pytest.mark.asyncio
     async def test_refresh_inactive_user_direct(self, test_db: AsyncSession):
         """Test refresh for inactive user."""
+        from fastapi import HTTPException
+
         from app.api.auth import refresh_token
         from app.api.schemas import RefreshTokenRequest
-        from fastapi import HTTPException
 
         user = User(
             username="inactiverefresh",

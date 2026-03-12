@@ -6,17 +6,17 @@ Combines all API route modules into a single router.
 
 from fastapi import APIRouter
 
-from app.api.auth import router as auth_router
-from app.api.interfaces import router as interfaces_router
-from app.api.tasks import router as tasks_router
-from app.api.data import router as data_router
-from app.api.tables import router as tables_router
-from app.api.users import router as users_router
-from app.api.scripts import router as scripts_router
-from app.api.executions import router as executions_router
 from app.api import settings as settings_api
-from app.api.websocket import router as ws_router
+from app.api.auth import router as auth_router
+from app.api.data import router as data_router
+from app.api.executions import router as executions_router
+from app.api.interfaces import router as interfaces_router
 from app.api.metrics import router as metrics_router
+from app.api.scripts import router as scripts_router
+from app.api.tables import router as tables_router
+from app.api.tasks import router as tasks_router
+from app.api.users import router as users_router
+from app.api.websocket import router as ws_router
 
 api_router = APIRouter()
 

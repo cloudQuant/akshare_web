@@ -2,10 +2,10 @@
 Direct tests for AkshareProvider to maximize coverage.
 """
 
-import pytest
-import queue
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pandas as pd
-from unittest.mock import MagicMock, patch, AsyncMock
+import pytest
 
 from app.data_fetch.providers.akshare_provider import AkshareProvider, FuncThread
 
@@ -14,6 +14,7 @@ class TestFuncThread:
     def test_success(self):
         def add(a, b):
             return a + b
+
         t = FuncThread(add, 1, 2)
         t.start()
         t.join(timeout=5)
@@ -24,6 +25,7 @@ class TestFuncThread:
     def test_exception(self):
         def fail():
             raise ValueError("boom")
+
         t = FuncThread(fail)
         t.start()
         t.join(timeout=5)
@@ -33,8 +35,10 @@ class TestFuncThread:
 
     def test_timeout(self):
         import time
+
         def slow():
             time.sleep(10)
+
         t = FuncThread(slow)
         t.start()
         status, result = t.get_result(timeout=0.1)
@@ -88,8 +92,10 @@ class TestConnectDisconnect:
 
     def test_context_manager(self):
         provider = AkshareProvider(db_url="sqlite:///test.db")
-        with patch.object(provider, 'connect_db') as mock_conn, \
-             patch.object(provider, 'disconnect_db') as mock_disc:
+        with (
+            patch.object(provider, "connect_db") as mock_conn,
+            patch.object(provider, "disconnect_db") as mock_disc,
+        ):
             with provider:
                 mock_conn.assert_called_once()
             mock_disc.assert_called_once()
@@ -138,11 +144,13 @@ class TestAutoCreateTable:
         provider = AkshareProvider(db_url="mysql://u:p@h/db")
         provider.cursor = MagicMock()
         provider.connection = MagicMock()
-        df = pd.DataFrame({
-            "int_col": pd.Series([1, 2], dtype="int64"),
-            "float_col": pd.Series([1.0, 2.0], dtype="float64"),
-            "str_col": pd.Series(["a", "b"], dtype="object"),
-        })
+        df = pd.DataFrame(
+            {
+                "int_col": pd.Series([1, 2], dtype="int64"),
+                "float_col": pd.Series([1.0, 2.0], dtype="float64"),
+                "str_col": pd.Series(["a", "b"], dtype="object"),
+            }
+        )
         provider._auto_create_table("test_tbl", df)
         provider.cursor.execute.assert_called_once()
         call_sql = provider.cursor.execute.call_args[0][0]
@@ -226,7 +234,7 @@ class TestSaveDataEdgeCases:
 
     def test_invalid_columns(self):
         provider = AkshareProvider(db_url="mysql://u:p@h/db")
-        df = pd.DataFrame({None: [1], float('nan'): [2]})
+        df = pd.DataFrame({None: [1], float("nan"): [2]})
         result = provider.save_data(df, "test_tbl")
         assert result == 0
 
@@ -238,11 +246,16 @@ class TestSaveDataEdgeCases:
         # SHOW TABLES returns existing table
         provider.cursor.fetchone.side_effect = [("tbl",)]  # table exists
         # SHOW COLUMNS returns columns
-        provider.cursor.fetchall.return_value = [("name", "TEXT", "YES", "", None, ""), ("val", "INT", "YES", "", None, "")]
+        provider.cursor.fetchall.return_value = [
+            ("name", "TEXT", "YES", "", None, ""),
+            ("val", "INT", "YES", "", None, ""),
+        ]
         provider.cursor.executemany = MagicMock()
         df = pd.DataFrame({"name": ["a", "b"], "val": [1, 2]})
-        with patch.object(provider, 'connect_db', return_value=True), \
-             patch.object(provider, 'disconnect_db'):
+        with (
+            patch.object(provider, "connect_db", return_value=True),
+            patch.object(provider, "disconnect_db"),
+        ):
             result = provider.save_data(df, "test_tbl")
         assert result == 2
 
@@ -255,8 +268,10 @@ class TestSaveDataEdgeCases:
         provider.cursor.fetchall.return_value = [("name", "TEXT", "YES", "", None, "")]
         provider.cursor.executemany = MagicMock()
         df = pd.DataFrame({"name": ["a"]})
-        with patch.object(provider, 'connect_db', return_value=True), \
-             patch.object(provider, 'disconnect_db'):
+        with (
+            patch.object(provider, "connect_db", return_value=True),
+            patch.object(provider, "disconnect_db"),
+        ):
             result = provider.save_data(df, "test_tbl", ignore_duplicates=True)
         assert result == 1
 
@@ -266,12 +281,19 @@ class TestSaveDataEdgeCases:
         provider.connection = MagicMock()
         provider.connection.open = True
         provider.cursor.fetchone.side_effect = [("tbl",)]
-        provider.cursor.fetchall.return_value = [("id", "INT", "NO", "PRI", None, ""), ("name", "TEXT", "YES", "", None, "")]
+        provider.cursor.fetchall.return_value = [
+            ("id", "INT", "NO", "PRI", None, ""),
+            ("name", "TEXT", "YES", "", None, ""),
+        ]
         provider.cursor.executemany = MagicMock()
         df = pd.DataFrame({"id": [1], "name": ["a"]})
-        with patch.object(provider, 'connect_db', return_value=True), \
-             patch.object(provider, 'disconnect_db'):
-            result = provider.save_data(df, "test_tbl", on_duplicate_update=True, unique_keys=["id"])
+        with (
+            patch.object(provider, "connect_db", return_value=True),
+            patch.object(provider, "disconnect_db"),
+        ):
+            result = provider.save_data(
+                df, "test_tbl", on_duplicate_update=True, unique_keys=["id"]
+            )
         assert result == 1
 
     def test_save_create_table(self):
@@ -284,9 +306,11 @@ class TestSaveDataEdgeCases:
         provider.cursor.fetchall.return_value = [("name", "TEXT", "YES", "", None, "")]
         provider.cursor.executemany = MagicMock()
         df = pd.DataFrame({"name": ["a"]})
-        with patch.object(provider, 'connect_db', return_value=True), \
-             patch.object(provider, 'disconnect_db'), \
-             patch.object(provider, '_auto_create_table'):
+        with (
+            patch.object(provider, "connect_db", return_value=True),
+            patch.object(provider, "disconnect_db"),
+            patch.object(provider, "_auto_create_table"),
+        ):
             result = provider.save_data(df, "test_tbl", create_table=True)
         assert result == 1
 
@@ -299,8 +323,10 @@ class TestSaveDataEdgeCases:
         # Table has column "id" but df has "name" - no overlap
         provider.cursor.fetchall.return_value = [("id", "INT", "NO", "PRI", None, "")]
         df = pd.DataFrame({"name": ["a"]})
-        with patch.object(provider, 'connect_db', return_value=True), \
-             patch.object(provider, 'disconnect_db'):
+        with (
+            patch.object(provider, "connect_db", return_value=True),
+            patch.object(provider, "disconnect_db"),
+        ):
             result = provider.save_data(df, "test_tbl")
         assert result == 0
 
@@ -314,19 +340,30 @@ class TestSaveDataEdgeCases:
         provider.cursor.executemany = MagicMock()
         # One good column, one "nan" column
         df = pd.DataFrame({"good": ["a"], "nan": [1]})
-        with patch.object(provider, 'connect_db', return_value=True), \
-             patch.object(provider, 'disconnect_db'):
+        with (
+            patch.object(provider, "connect_db", return_value=True),
+            patch.object(provider, "disconnect_db"),
+        ):
             result = provider.save_data(df, "test_tbl")
         assert result == 1
 
 
 class TestConnectDbMySQL:
     def test_connect_success(self):
-        import pymysql
         provider = AkshareProvider(db_url="mysql://u:p@h/db")
         mock_conn = MagicMock()
         mock_conn.open = True
-        with patch("app.data_fetch.providers.akshare_provider.pymysql.connect", return_value=mock_conn):
+        mock_conn.cursor.return_value = MagicMock()
+        with (
+            patch(
+                "app.data_fetch.providers.akshare_provider._get_connection_pool",
+                return_value=None,
+            ),
+            patch(
+                "app.data_fetch.providers.akshare_provider.pymysql.connect",
+                return_value=mock_conn,
+            ),
+        ):
             result = provider.connect_db()
         assert result is True
         assert provider.connection is mock_conn
@@ -341,10 +378,16 @@ class TestConnectDbMySQL:
 
     def test_connect_error(self):
         import pymysql
+
         provider = AkshareProvider(db_url="mysql://u:p@h/db")
-        with patch("app.data_fetch.providers.akshare_provider.pymysql.connect", side_effect=pymysql.Error("fail")):
-            with pytest.raises(pymysql.Error):
-                provider.connect_db()
+        with (
+            patch(
+                "app.data_fetch.providers.akshare_provider.pymysql.connect",
+                side_effect=pymysql.Error("fail"),
+            ),
+            pytest.raises(pymysql.Error),
+        ):
+            provider.connect_db()
 
 
 class TestGetTableRowCountMySQL:
@@ -354,18 +397,23 @@ class TestGetTableRowCountMySQL:
         provider.cursor.fetchone.return_value = (42,)
         provider.connection = MagicMock()
         provider.connection.open = True
-        with patch.object(provider, 'connect_db', return_value=True), \
-             patch.object(provider, 'disconnect_db'):
+        with (
+            patch.object(provider, "connect_db", return_value=True),
+            patch.object(provider, "disconnect_db"),
+        ):
             result = provider.get_table_row_count("test_tbl")
         assert result == 42
 
     def test_error(self):
         import pymysql
+
         provider = AkshareProvider(db_url="mysql://u:p@h/db")
         provider.cursor = MagicMock()
         provider.cursor.execute.side_effect = pymysql.Error("fail")
-        with patch.object(provider, 'connect_db', return_value=True), \
-             patch.object(provider, 'disconnect_db'):
+        with (
+            patch.object(provider, "connect_db", return_value=True),
+            patch.object(provider, "disconnect_db"),
+        ):
             result = provider.get_table_row_count("test_tbl")
         assert result == 0
 
@@ -376,21 +424,26 @@ class TestCreateTableIfNotExistsMySQL:
         provider.cursor = MagicMock()
         provider.connection = MagicMock()
         provider.connection.open = True
-        with patch.object(provider, 'table_exists', return_value=False), \
-             patch.object(provider, 'connect_db', return_value=True), \
-             patch.object(provider, 'disconnect_db'):
+        with (
+            patch.object(provider, "table_exists", return_value=False),
+            patch.object(provider, "connect_db", return_value=True),
+            patch.object(provider, "disconnect_db"),
+        ):
             result = provider.create_table_if_not_exists("new_tbl", "CREATE TABLE new_tbl (id INT)")
         assert result is True
 
     def test_create_error(self):
         import pymysql
+
         provider = AkshareProvider(db_url="mysql://u:p@h/db")
         provider.cursor = MagicMock()
         provider.cursor.execute.side_effect = pymysql.Error("fail")
         provider.connection = MagicMock()
-        with patch.object(provider, 'table_exists', return_value=False), \
-             patch.object(provider, 'connect_db', return_value=True), \
-             patch.object(provider, 'disconnect_db'):
+        with (
+            patch.object(provider, "table_exists", return_value=False),
+            patch.object(provider, "connect_db", return_value=True),
+            patch.object(provider, "disconnect_db"),
+        ):
             result = provider.create_table_if_not_exists("new_tbl", "CREATE TABLE ...")
         assert result is False
 
@@ -402,8 +455,10 @@ class TestTableExists:
         provider.cursor.fetchone.return_value = ("test_tbl",)
         provider.connection = MagicMock()
         provider.connection.open = True
-        with patch.object(provider, 'connect_db', return_value=True), \
-             patch.object(provider, 'disconnect_db'):
+        with (
+            patch.object(provider, "connect_db", return_value=True),
+            patch.object(provider, "disconnect_db"),
+        ):
             result = provider.table_exists("test_tbl")
         assert result is True
 
@@ -413,18 +468,23 @@ class TestTableExists:
         provider.cursor.fetchone.return_value = None
         provider.connection = MagicMock()
         provider.connection.open = True
-        with patch.object(provider, 'connect_db', return_value=True), \
-             patch.object(provider, 'disconnect_db'):
+        with (
+            patch.object(provider, "connect_db", return_value=True),
+            patch.object(provider, "disconnect_db"),
+        ):
             result = provider.table_exists("test_tbl")
         assert result is False
 
     def test_error(self):
         import pymysql
+
         provider = AkshareProvider(db_url="mysql://u:p@h/db")
         provider.cursor = MagicMock()
         provider.cursor.execute.side_effect = pymysql.Error("fail")
-        with patch.object(provider, 'connect_db', return_value=True), \
-             patch.object(provider, 'disconnect_db'):
+        with (
+            patch.object(provider, "connect_db", return_value=True),
+            patch.object(provider, "disconnect_db"),
+        ):
             result = provider.table_exists("test_tbl")
         assert result is False
 
@@ -432,6 +492,6 @@ class TestTableExists:
 class TestCreateTableIfNotExists:
     def test_table_already_exists(self):
         provider = AkshareProvider(db_url="sqlite:///test.db")
-        with patch.object(provider, 'table_exists', return_value=True):
+        with patch.object(provider, "table_exists", return_value=True):
             result = provider.create_table_if_not_exists("existing_tbl", "CREATE TABLE ...")
         assert result is False

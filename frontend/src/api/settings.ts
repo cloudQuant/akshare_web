@@ -1,4 +1,8 @@
 import request from '@/utils/request'
+import type {
+  DatabaseConfigResponse,
+  TestConnectionResponse,
+} from '@/types'
 
 export interface DatabaseConfig {
   host: string
@@ -9,46 +13,41 @@ export interface DatabaseConfig {
 }
 
 export const settingsApi = {
-  // Get main database config
-  getDatabaseConfig(): Promise<any> {
+  getDatabaseConfig(): Promise<DatabaseConfigResponse> {
     return request({
       url: '/settings/database',
-      method: 'GET'
+      method: 'GET',
     })
   },
 
-  // Get warehouse database config
-  getWarehouseConfig(): Promise<any> {
+  getWarehouseConfig(): Promise<DatabaseConfigResponse> {
     return request({
       url: '/settings/database/warehouse',
-      method: 'GET'
+      method: 'GET',
     })
   },
 
-  // Test database connection
-  testConnection(config: DatabaseConfig): Promise<any> {
+  testConnection(config: DatabaseConfig): Promise<TestConnectionResponse> {
     return request({
       url: '/settings/database/test',
       method: 'POST',
-      data: config
+      data: config,
     })
   },
 
-  // Test warehouse connection
-  testWarehouseConnection(config: DatabaseConfig): Promise<any> {
+  testWarehouseConnection(config: DatabaseConfig): Promise<TestConnectionResponse> {
     return request({
       url: '/settings/database/warehouse/test',
       method: 'POST',
-      data: config
+      data: config,
     })
   },
 
-  // Update database config
-  updateDatabaseConfig(config: DatabaseConfig): Promise<any> {
+  updateDatabaseConfig(config: DatabaseConfig): Promise<DatabaseConfigResponse> {
     return request({
       url: '/settings/database',
       method: 'PUT',
-      data: config
+      data: config,
     })
-  }
+  },
 }

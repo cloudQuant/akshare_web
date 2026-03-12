@@ -1,6 +1,5 @@
 import request from '@/utils/request'
 import type {
-  ApiResponse,
   User,
   PaginationParams,
   PaginatedResponse,
@@ -24,8 +23,7 @@ export const usersApi = {
     })
   },
 
-  // Update user role (admin only)
-  updateRole(userId: number, role: 'Admin' | 'User'): Promise<void> {
+  updateRole(userId: number, role: 'admin' | 'user'): Promise<void> {
     return request({
       url: `/users/${userId}/role`,
       method: 'PUT',

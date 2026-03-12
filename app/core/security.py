@@ -4,10 +4,10 @@ Security utilities for authentication and authorization.
 Provides password hashing, JWT token creation/verification, and permission checking.
 """
 
-import bcrypt
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+import bcrypt
 import jwt
 from jwt.exceptions import PyJWTError
 from loguru import logger
@@ -27,12 +27,12 @@ def hash_password(password: str) -> str:
         Hashed password
     """
     # Bcrypt has a 72-byte limit, truncate if necessary
-    password_bytes = password.encode('utf-8')
+    password_bytes = password.encode("utf-8")
     if len(password_bytes) > 72:
         password_bytes = password_bytes[:72]
     salt = bcrypt.gensalt()
     hashed = bcrypt.hashpw(password_bytes, salt)
-    return hashed.decode('utf-8')
+    return hashed.decode("utf-8")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -47,10 +47,10 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         True if password matches, False otherwise
     """
     # Bcrypt has a 72-byte limit, truncate if necessary
-    password_bytes = plain_password.encode('utf-8')
+    password_bytes = plain_password.encode("utf-8")
     if len(password_bytes) > 72:
         password_bytes = password_bytes[:72]
-    hashed_bytes = hashed_password.encode('utf-8')
+    hashed_bytes = hashed_password.encode("utf-8")
     return bcrypt.checkpw(password_bytes, hashed_bytes)
 
 
@@ -73,22 +73,21 @@ def create_access_token(
     if expires_delta:
         expire = datetime.now(UTC) + expires_delta
     else:
-        expire = datetime.now(UTC) + timedelta(
-            minutes=settings.access_token_expire_minutes
-        )
+        expire = datetime.now(UTC) + timedelta(minutes=settings.access_token_expire_minutes)
 
-    to_encode.update({
-        "exp": expire,
-        "type": "access",
-    })
+    to_encode.update(
+        {
+            "exp": expire,
+            "type": "access",
+        }
+    )
 
-    encoded_jwt = jwt.encode(
+    # PyJWT returns str directly (no need for .decode())
+    return jwt.encode(
         to_encode,
         settings.secret_key,
         algorithm=settings.algorithm,
     )
-    # PyJWT returns str directly (no need for .decode())
-    return encoded_jwt
 
 
 def create_refresh_token(
@@ -112,17 +111,18 @@ def create_refresh_token(
     else:
         expire = datetime.now(UTC) + timedelta(days=settings.refresh_token_expire_days)
 
-    to_encode.update({
-        "exp": expire,
-        "type": "refresh",
-    })
+    to_encode.update(
+        {
+            "exp": expire,
+            "type": "refresh",
+        }
+    )
 
-    encoded_jwt = jwt.encode(
+    return jwt.encode(
         to_encode,
         settings.secret_key,
         algorithm=settings.algorithm,
     )
-    return encoded_jwt
 
 
 def decode_token(token: str) -> dict[str, Any] | None:
@@ -136,12 +136,11 @@ def decode_token(token: str) -> dict[str, Any] | None:
         Decoded token payload or None if invalid
     """
     try:
-        payload = jwt.decode(
+        return jwt.decode(  # type: ignore[no-any-return]
             token,
             settings.secret_key,
             algorithms=[settings.algorithm],
         )
-        return payload
     except PyJWTError as e:
         logger.warning(f"Token decode failed: {e}")
         return None
@@ -194,9 +193,7 @@ class PermissionChecker:
 
     @staticmethod
     def can_access_resource(
-        user_role: UserRole | str,
-        user_id: int,
-        resource_owner_id: int
+        user_role: UserRole | str, user_id: int, resource_owner_id: int
     ) -> bool:
         """
         Check if user can access a resource.
@@ -218,9 +215,7 @@ class PermissionChecker:
 
     @staticmethod
     def can_modify_user(
-        current_user_role: UserRole | str,
-        current_user_id: int,
-        target_user_id: int
+        current_user_role: UserRole | str, current_user_id: int, target_user_id: int
     ) -> bool:
         """
         Check if current user can modify target user.

@@ -4,9 +4,7 @@ Core module tests.
 Tests for core functionality including database and security.
 """
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 
 class TestCoreSecurity:
@@ -206,9 +204,7 @@ class TestPermissionChecker:
         from app.core.security import PermissionChecker
 
         can_access = PermissionChecker.can_access_resource(
-            user_role="admin",
-            user_id=1,
-            resource_owner_id=2
+            user_role="admin", user_id=1, resource_owner_id=2
         )
         assert can_access is True
 
@@ -217,9 +213,7 @@ class TestPermissionChecker:
         from app.core.security import PermissionChecker
 
         can_access = PermissionChecker.can_access_resource(
-            user_role="user",
-            user_id=1,
-            resource_owner_id=1
+            user_role="user", user_id=1, resource_owner_id=1
         )
         assert can_access is True
 
@@ -228,9 +222,7 @@ class TestPermissionChecker:
         from app.core.security import PermissionChecker
 
         can_access = PermissionChecker.can_access_resource(
-            user_role="user",
-            user_id=1,
-            resource_owner_id=2
+            user_role="user", user_id=1, resource_owner_id=2
         )
         assert can_access is False
 
@@ -239,9 +231,7 @@ class TestPermissionChecker:
         from app.core.security import PermissionChecker
 
         can_modify = PermissionChecker.can_modify_user(
-            current_user_role="admin",
-            current_user_id=1,
-            target_user_id=2
+            current_user_role="admin", current_user_id=1, target_user_id=2
         )
         assert can_modify is True
 
@@ -250,9 +240,7 @@ class TestPermissionChecker:
         from app.core.security import PermissionChecker
 
         can_modify = PermissionChecker.can_modify_user(
-            current_user_role="user",
-            current_user_id=1,
-            target_user_id=1
+            current_user_role="user", current_user_id=1, target_user_id=1
         )
         assert can_modify is True
 
@@ -261,9 +249,7 @@ class TestPermissionChecker:
         from app.core.security import PermissionChecker
 
         can_modify = PermissionChecker.can_modify_user(
-            current_user_role="user",
-            current_user_id=1,
-            target_user_id=2
+            current_user_role="user", current_user_id=1, target_user_id=2
         )
         assert can_modify is False
 
@@ -292,9 +278,10 @@ class TestCoreDatabase:
 
     def test_get_db_function_exists(self):
         """Test get_db function exists."""
+        import inspect
+
         from app.core.database import get_db
 
-        import inspect
         assert inspect.isasyncgenfunction(get_db)
 
 
@@ -369,7 +356,7 @@ class TestMainApp:
         """Test app has routes."""
         from app.main import app
 
-        routes = [r for r in app.routes if hasattr(r, 'path')]
+        routes = [r for r in app.routes if hasattr(r, "path")]
         assert len(routes) > 0
 
     def test_app_has_cors_middleware(self):

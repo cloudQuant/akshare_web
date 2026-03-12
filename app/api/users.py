@@ -4,10 +4,8 @@ User management API routes.
 Provides endpoints for managing users (admin functions).
 """
 
-from typing import Any
-
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import CurrentAdmin, get_db
@@ -33,7 +31,7 @@ async def list_users(
     is_active: bool | None = Query(None, description="Filter by active status"),
     search: str | None = Query(None, description="Search by username, email, or name"),
     db: AsyncSession = Depends(get_db),
-):
+) -> PaginatedResponse:
     """
     List all users.
 
@@ -87,7 +85,7 @@ async def get_user(
     user_id: int,
     current_admin: CurrentAdmin,
     db: AsyncSession = Depends(get_db),
-):
+) -> UserResponse:
     """
     Get user details.
 
@@ -111,7 +109,7 @@ async def update_user(
     current_admin: CurrentAdmin,
     user_update: UserUpdateRequest | None = None,
     db: AsyncSession = Depends(get_db),
-):
+) -> UserResponse:
     """
     Update user.
 
@@ -164,7 +162,7 @@ async def delete_user(
     user_id: int,
     current_admin: CurrentAdmin,
     db: AsyncSession = Depends(get_db),
-):
+) -> APIResponse:
     """
     Delete user.
 
@@ -209,7 +207,7 @@ async def reset_user_password(
     body: ResetPasswordRequest,
     current_admin: CurrentAdmin,
     db: AsyncSession = Depends(get_db),
-):
+) -> APIResponse:
     """
     Reset user password.
 

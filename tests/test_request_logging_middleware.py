@@ -1,9 +1,8 @@
 """Tests for RequestLoggingMiddleware."""
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from starlette.testclient import TestClient
 from fastapi import FastAPI
+from starlette.testclient import TestClient
 
 from app.middleware.request_logging import RequestLoggingMiddleware
 

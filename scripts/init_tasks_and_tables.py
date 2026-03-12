@@ -13,23 +13,21 @@ This script:
 import asyncio
 import os
 import sys
-from datetime import UTC, datetime
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
-from sqlalchemy import select, text, func
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select, text
 
 from app.core.config import settings
-from app.core.database import async_session_maker, engine, Base
+from app.core.database import async_session_maker, engine
 from app.models.data_script import DataScript
-from app.models.task import ScheduledTask, ScheduleType
 from app.models.data_table import DataTable
+from app.models.task import ScheduledTask, ScheduleType
 
 
 async def create_tasks_from_scripts():
@@ -100,13 +98,16 @@ async def create_tasks_from_scripts():
             db.add_all(batch)
             await db.commit()
 
-        print(f"Created {created} new scheduled tasks (total: {created + len(existing_script_ids)})")
+        print(
+            f"Created {created} new scheduled tasks (total: {created + len(existing_script_ids)})"
+        )
 
 
 async def sync_data_warehouse_tables():
     """Sync data warehouse tables into data_tables metadata."""
     # Connect to data warehouse using sync engine for SHOW TABLES
     from urllib.parse import quote_plus
+
     pw = quote_plus(settings.data_mysql_password)
     data_url = f"mysql+pymysql://{settings.data_mysql_user}:{pw}@{settings.data_mysql_host}:{settings.data_mysql_port}/{settings.data_mysql_database}"
     sync_engine = create_engine(data_url)
@@ -117,7 +118,9 @@ async def sync_data_warehouse_tables():
         warehouse_tables = {row[0] for row in result.fetchall()}
     sync_engine.dispose()
 
-    print(f"Found {len(warehouse_tables)} tables in data warehouse ({settings.data_mysql_database})")
+    print(
+        f"Found {len(warehouse_tables)} tables in data warehouse ({settings.data_mysql_database})"
+    )
 
     async with async_session_maker() as db:
         # Get existing data_tables entries
@@ -173,8 +176,8 @@ async def sync_data_warehouse_tables():
 
 async def refresh_row_counts():
     """Refresh row_count for all data_tables from the actual data warehouse."""
-    from urllib.parse import quote_plus
     import re
+    from urllib.parse import quote_plus
 
     pw = quote_plus(settings.data_mysql_password)
     data_url = f"mysql+pymysql://{settings.data_mysql_user}:{pw}@{settings.data_mysql_host}:{settings.data_mysql_port}/{settings.data_mysql_database}"
@@ -190,7 +193,7 @@ async def refresh_row_counts():
 
         for table in tables:
             # Validate table name
-            if not re.match(r'^[A-Za-z_][A-Za-z0-9_]*$', table.table_name):
+            if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", table.table_name):
                 errors += 1
                 continue
 
@@ -206,7 +209,9 @@ async def refresh_row_counts():
                 errors += 1
 
             if (updated + errors) % 100 == 0:
-                print(f"  Processed {updated + errors}/{len(tables)}... ({updated} updated, {errors} errors)")
+                print(
+                    f"  Processed {updated + errors}/{len(tables)}... ({updated} updated, {errors} errors)"
+                )
 
         await db.commit()
         sync_engine.dispose()

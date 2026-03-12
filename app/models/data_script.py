@@ -9,7 +9,7 @@ import enum
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Enum, Integer, JSON, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Enum, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -61,16 +61,10 @@ class DataScript(Base):
     }
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    script_id: Mapped[str] = mapped_column(
-        String(100), unique=True, index=True, nullable=False
-    )
+    script_id: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=False)
     script_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    category: Mapped[str] = mapped_column(
-        String(50), nullable=False, index=True
-    )
-    sub_category: Mapped[str | None] = mapped_column(
-        String(50), nullable=True, index=True
-    )
+    category: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    sub_category: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
     frequency: Mapped[ScriptFrequency] = mapped_column(
         Enum(ScriptFrequency),
         nullable=True,
@@ -78,9 +72,7 @@ class DataScript(Base):
     )
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     source: Mapped[str] = mapped_column(String(50), default="akshare", nullable=False)
-    target_table: Mapped[str | None] = mapped_column(
-        String(100), nullable=True, index=True
-    )
+    target_table: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
     module_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
     function_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     dependencies: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)

@@ -4,12 +4,26 @@ import { useRouter } from 'vue-router'
 import { ElMessage, type FormInstance } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import { settingsApi } from '@/api/settings'
+import { getErrorMessage } from '@/utils/error'
+
+interface DbConfig {
+  host: string
+  port: number
+  database: string
+  user: string
+  password: string
+}
 
 const router = useRouter()
 const authStore = useAuthStore()
 
-// System info
-const systemInfo = ref<any>(null)
+// System info (health endpoint response)
+interface HealthInfo {
+  status?: string
+  version?: string
+  [key: string]: unknown
+}
+const systemInfo = ref<HealthInfo | null>(null)
 const loading = ref(false)
 
 // Database configuration forms
@@ -38,8 +52,8 @@ const warehouseDbConfig = reactive({
   password: ''
 })
 
-let originalMainDb: any = null
-let originalWarehouseDb: any = null
+let originalMainDb: DbConfig | null = null
+let originalWarehouseDb: DbConfig | null = null
 
 const mainDbStatus = ref({ connected: false })
 const warehouseDbStatus = ref({ connected: false })
@@ -99,8 +113,8 @@ const loadConfigs = async () => {
 
     mainDbStatus.value = { connected: true }
     warehouseDbStatus.value = { connected: true }
-  } catch (error: any) {
-    ElMessage.error('加载配置失败: ' + (error.response?.data?.detail || error.message))
+  } catch (error: unknown) {
+    ElMessage.error('加载配置失败: ' + getErrorMessage(error))
   }
 }
 
@@ -140,7 +154,10 @@ const handleTestMainDb = async () => {
 
   testingMainDb.value = true
   try {
-    const result = await settingsApi.testConnection(mainDbConfig) as any
+    const result = (await settingsApi.testConnection(mainDbConfig)) as {
+      success?: boolean
+      message?: string
+    }
     if (result?.success !== false) {
       ElMessage.success('主数据库连接成功')
       mainDbStatus.value = { connected: true }
@@ -148,8 +165,8 @@ const handleTestMainDb = async () => {
       ElMessage.error('连接失败: ' + (result?.message || '未知错误'))
       mainDbStatus.value = { connected: false }
     }
-  } catch (error: any) {
-    ElMessage.error('连接测试失败: ' + (error.response?.data?.detail || error.message))
+  } catch (error: unknown) {
+    ElMessage.error('连接测试失败: ' + getErrorMessage(error))
     mainDbStatus.value = { connected: false }
   } finally {
     testingMainDb.value = false
@@ -162,7 +179,10 @@ const handleTestWarehouseDb = async () => {
 
   testingWarehouseDb.value = true
   try {
-    const result = await settingsApi.testWarehouseConnection(warehouseDbConfig) as any
+    const result = (await settingsApi.testWarehouseConnection(warehouseDbConfig)) as {
+      success?: boolean
+      message?: string
+    }
     if (result?.success !== false) {
       ElMessage.success('数据仓库连接成功')
       warehouseDbStatus.value = { connected: true }
@@ -170,8 +190,8 @@ const handleTestWarehouseDb = async () => {
       ElMessage.error('连接失败: ' + (result?.message || '未知错误'))
       warehouseDbStatus.value = { connected: false }
     }
-  } catch (error: any) {
-    ElMessage.error('连接测试失败: ' + (error.response?.data?.detail || error.message))
+  } catch (error: unknown) {
+    ElMessage.error('连接测试失败: ' + getErrorMessage(error))
     warehouseDbStatus.value = { connected: false }
   } finally {
     testingWarehouseDb.value = false
@@ -220,18 +240,31 @@ onMounted(() => {
         <span>系统设置</span>
       </template>
 
-      <div v-if="!authStore.isAdmin" class="no-permission">
+      <div
+        v-if="!authStore.isAdmin"
+        class="no-permission"
+      >
         <el-empty description="您没有权限访问此页面" />
       </div>
 
-      <div v-else class="content">
+      <div
+        v-else
+        class="content"
+      >
         <!-- System Health -->
-        <el-card class="section-card" shadow="never">
+        <el-card
+          class="section-card"
+          shadow="never"
+        >
           <template #title>
             <span>系统状态</span>
           </template>
 
-          <el-descriptions v-loading="loading" :column="2" border>
+          <el-descriptions
+            v-loading="loading"
+            :column="2"
+            border
+          >
             <el-descriptions-item label="状态">
               <el-tag :type="isHealthy() ? 'success' : 'danger'">
                 {{ systemInfo?.status || 'unknown' }}
@@ -254,15 +287,26 @@ onMounted(() => {
         </el-card>
 
         <!-- Database Configuration -->
-        <el-row :gutter="20" style="margin-top: 20px">
+        <el-row
+          :gutter="20"
+          style="margin-top: 20px"
+        >
           <el-col :span="12">
-            <el-card class="config-card" shadow="never">
+            <el-card
+              class="config-card"
+              shadow="never"
+            >
               <template #title>
                 <div class="card-header">
                   <div class="header-title">
-                  <span>主数据库配置</span>
-                </div>
-                  <el-tag type="primary" size="small">应用数据库</el-tag>
+                    <span>主数据库配置</span>
+                  </div>
+                  <el-tag
+                    type="primary"
+                    size="small"
+                  >
+                    应用数据库
+                  </el-tag>
                 </div>
               </template>
 
@@ -272,46 +316,105 @@ onMounted(() => {
                 :rules="dbFormRules"
                 label-width="100px"
               >
-                <el-form-item label="主机" prop="host">
-                  <el-input v-model="mainDbConfig.host" :disabled="!editing" />
+                <el-form-item
+                  label="主机"
+                  prop="host"
+                >
+                  <el-input
+                    v-model="mainDbConfig.host"
+                    :disabled="!editing"
+                  />
                 </el-form-item>
-                <el-form-item label="端口" prop="port">
-                  <el-input-number v-model="mainDbConfig.port" :min="1" :max="65535" :disabled="!editing" style="width: 100%" />
+                <el-form-item
+                  label="端口"
+                  prop="port"
+                >
+                  <el-input-number
+                    v-model="mainDbConfig.port"
+                    :min="1"
+                    :max="65535"
+                    :disabled="!editing"
+                    style="width: 100%"
+                  />
                 </el-form-item>
-                <el-form-item label="数据库" prop="database">
-                  <el-input v-model="mainDbConfig.database" :disabled="!editing" />
+                <el-form-item
+                  label="数据库"
+                  prop="database"
+                >
+                  <el-input
+                    v-model="mainDbConfig.database"
+                    :disabled="!editing"
+                  />
                 </el-form-item>
-                <el-form-item label="用户名" prop="user">
-                  <el-input v-model="mainDbConfig.user" :disabled="!editing" />
+                <el-form-item
+                  label="用户名"
+                  prop="user"
+                >
+                  <el-input
+                    v-model="mainDbConfig.user"
+                    :disabled="!editing"
+                  />
                 </el-form-item>
-                <el-form-item label="密码" prop="password">
-                  <el-input v-model="mainDbConfig.password" type="password" show-password :disabled="!editing" />
+                <el-form-item
+                  label="密码"
+                  prop="password"
+                >
+                  <el-input
+                    v-model="mainDbConfig.password"
+                    type="password"
+                    show-password
+                    :disabled="!editing"
+                  />
                 </el-form-item>
                 <el-form-item v-if="editing">
-                  <el-button @click="handleTestMainDb" :loading="testingMainDb">
+                  <el-button
+                    :loading="testingMainDb"
+                    @click="handleTestMainDb"
+                  >
                     测试连接
                   </el-button>
                 </el-form-item>
               </el-form>
 
               <template #footer>
-                <el-button v-if="!editing" type="primary" @click="startEdit">编辑</el-button>
+                <el-button
+                  v-if="!editing"
+                  type="primary"
+                  @click="startEdit"
+                >
+                  编辑
+                </el-button>
                 <template v-else>
-                  <el-button @click="cancelEdit">取消</el-button>
-                  <el-button type="primary" @click="handleSaveMainDb">保存</el-button>
+                  <el-button @click="cancelEdit">
+                    取消
+                  </el-button>
+                  <el-button
+                    type="primary"
+                    @click="handleSaveMainDb"
+                  >
+                    保存
+                  </el-button>
                 </template>
               </template>
             </el-card>
           </el-col>
 
           <el-col :span="12">
-            <el-card class="config-card" shadow="never">
+            <el-card
+              class="config-card"
+              shadow="never"
+            >
               <template #title>
                 <div class="card-header">
                   <div class="header-title">
-                  <span>数据仓库配置</span>
-                </div>
-                  <el-tag type="success" size="small">数据仓库</el-tag>
+                    <span>数据仓库配置</span>
+                  </div>
+                  <el-tag
+                    type="success"
+                    size="small"
+                  >
+                    数据仓库
+                  </el-tag>
                 </div>
               </template>
 
@@ -321,39 +424,94 @@ onMounted(() => {
                 :rules="dbFormRules"
                 label-width="100px"
               >
-                <el-form-item label="主机" prop="host">
-                  <el-input v-model="warehouseDbConfig.host" :disabled="!editingWarehouse" />
+                <el-form-item
+                  label="主机"
+                  prop="host"
+                >
+                  <el-input
+                    v-model="warehouseDbConfig.host"
+                    :disabled="!editingWarehouse"
+                  />
                 </el-form-item>
-                <el-form-item label="端口" prop="port">
-                  <el-input-number v-model="warehouseDbConfig.port" :min="1" :max="65535" :disabled="!editingWarehouse" style="width: 100%" />
+                <el-form-item
+                  label="端口"
+                  prop="port"
+                >
+                  <el-input-number
+                    v-model="warehouseDbConfig.port"
+                    :min="1"
+                    :max="65535"
+                    :disabled="!editingWarehouse"
+                    style="width: 100%"
+                  />
                 </el-form-item>
-                <el-form-item label="数据库" prop="database">
-                  <el-input v-model="warehouseDbConfig.database" :disabled="!editingWarehouse" />
+                <el-form-item
+                  label="数据库"
+                  prop="database"
+                >
+                  <el-input
+                    v-model="warehouseDbConfig.database"
+                    :disabled="!editingWarehouse"
+                  />
                 </el-form-item>
-                <el-form-item label="用户名" prop="user">
-                  <el-input v-model="warehouseDbConfig.user" :disabled="!editingWarehouse" />
+                <el-form-item
+                  label="用户名"
+                  prop="user"
+                >
+                  <el-input
+                    v-model="warehouseDbConfig.user"
+                    :disabled="!editingWarehouse"
+                  />
                 </el-form-item>
-                <el-form-item label="密码" prop="password">
-                  <el-input v-model="warehouseDbConfig.password" type="password" show-password :disabled="!editingWarehouse" />
+                <el-form-item
+                  label="密码"
+                  prop="password"
+                >
+                  <el-input
+                    v-model="warehouseDbConfig.password"
+                    type="password"
+                    show-password
+                    :disabled="!editingWarehouse"
+                  />
                 </el-form-item>
                 <el-form-item v-if="editingWarehouse">
-                  <el-button @click="handleTestWarehouseDb" :loading="testingWarehouseDb">
+                  <el-button
+                    :loading="testingWarehouseDb"
+                    @click="handleTestWarehouseDb"
+                  >
                     测试连接
                   </el-button>
                 </el-form-item>
               </el-form>
 
               <template #footer>
-                <el-button v-if="!editingWarehouse" type="primary" @click="startEditWarehouse">编辑</el-button>
+                <el-button
+                  v-if="!editingWarehouse"
+                  type="primary"
+                  @click="startEditWarehouse"
+                >
+                  编辑
+                </el-button>
                 <template v-else>
-                  <el-button @click="cancelEditWarehouse">取消</el-button>
-                  <el-button type="primary" @click="handleSaveWarehouseDb">保存</el-button>
+                  <el-button @click="cancelEditWarehouse">
+                    取消
+                  </el-button>
+                  <el-button
+                    type="primary"
+                    @click="handleSaveWarehouseDb"
+                  >
+                    保存
+                  </el-button>
                 </template>
               </template>
             </el-card>
 
             <!-- Connection Status -->
-            <el-card class="status-card" shadow="never" style="margin-top: 20px">
+            <el-card
+              class="status-card"
+              shadow="never"
+              style="margin-top: 20px"
+            >
               <template #title>
                 <span>连接状态</span>
               </template>
@@ -390,8 +548,15 @@ onMounted(() => {
             show-icon
           />
           <template #footer>
-            <el-button @click="showSaveWarning = false">取消</el-button>
-            <el-button type="primary" @click="confirmSave">确认保存</el-button>
+            <el-button @click="showSaveWarning = false">
+              取消
+            </el-button>
+            <el-button
+              type="primary"
+              @click="confirmSave"
+            >
+              确认保存
+            </el-button>
           </template>
         </el-dialog>
       </div>

@@ -4,9 +4,9 @@ Services module comprehensive tests.
 Full coverage tests for all services.
 """
 
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
+
 import pytest
-from unittest.mock import AsyncMock, Mock, MagicMock, patch
-import asyncio
 
 
 class TestScriptServiceMethods:
@@ -133,10 +133,13 @@ class TestExecutionServiceMethods:
         results = [0, 0, None, 0, None]  # scalar() returns, None for avg when no data
 
         call_count = 0
+
         async def mock_execute_func(arg):
             nonlocal call_count
             mock_result = MagicMock()
-            mock_result.scalar.return_value = results[call_count] if call_count < len(results) else 0
+            mock_result.scalar.return_value = (
+                results[call_count] if call_count < len(results) else 0
+            )
             call_count += 1
             return mock_result
 
@@ -286,8 +289,8 @@ class TestSchedulerServiceMethods:
         service = SchedulerService()
 
         # Just verify methods exist
-        assert hasattr(service, 'add_job')
-        assert hasattr(service, 'remove_job')
+        assert hasattr(service, "add_job")
+        assert hasattr(service, "remove_job")
 
 
 class TestRetryServiceMethods:
@@ -343,20 +346,21 @@ class TestTaskSchedulerMethods:
     @pytest.mark.asyncio
     async def test_start_shutdown(self):
         """Test starting and shutting down."""
+        from unittest.mock import AsyncMock
+
         from app.services.scheduler import TaskScheduler
-        from unittest.mock import patch, AsyncMock
 
         scheduler = TaskScheduler()
 
         # Mock init_scheduler_service to avoid DB connection
-        with patch('app.services.scheduler.init_scheduler_service') as mock_init:
+        with patch("app.services.scheduler.init_scheduler_service") as mock_init:
             mock_service = AsyncMock()
             mock_service.start.return_value = None
             mock_service.stop.return_value = None
             mock_init.return_value = mock_service
 
             # Mock _load_active_tasks to avoid DB queries
-            with patch.object(scheduler, '_load_active_tasks', return_value=None):
+            with patch.object(scheduler, "_load_active_tasks", return_value=None):
                 await scheduler.start()
                 assert scheduler.is_running is True
 

@@ -37,11 +37,19 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
+    testTimeout: 10000,
+    hookTimeout: 10000,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],
       include: ['src/**/*.{ts,vue}'],
       exclude: ['src/**/*.d.ts', 'src/main.ts'],
+      thresholds: {
+        lines: 40,
+        functions: 40,
+        branches: 40,
+        statements: 40,
+      },
     },
   },
   server: {

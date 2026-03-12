@@ -21,7 +21,9 @@ class TestGetExecutions:
         assert data["success"] is True
 
     @pytest.mark.asyncio
-    async def test_get_executions_with_filters(self, test_client: AsyncClient, test_user_token: str):
+    async def test_get_executions_with_filters(
+        self, test_client: AsyncClient, test_user_token: str
+    ):
         """Test listing executions with filters."""
         headers = {"Authorization": f"Bearer {test_user_token}"}
         response = await test_client.get(

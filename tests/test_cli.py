@@ -4,7 +4,6 @@ CLI module tests.
 Tests for command-line interface functions.
 """
 
-import pytest
 from click.testing import CliRunner
 
 

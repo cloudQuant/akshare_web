@@ -6,7 +6,7 @@ when tasks fail or complete after retries.
 """
 
 from datetime import UTC, datetime
-from typing import Any
+from email.mime.multipart import MIMEMultipart
 
 from loguru import logger
 
@@ -39,20 +39,23 @@ class NotificationService:
         # 1. WebSocket broadcast (best-effort)
         try:
             from app.api.websocket import ws_manager
-            await ws_manager.broadcast({
-                "type": "task_notification",
-                "data": {
-                    "notification_type": "task_failed",
-                    "task_id": task_id,
-                    "task_name": task_name,
-                    "execution_id": execution_id,
-                    "error_message": error_message,
-                    "retry_count": retry_count,
-                    "max_retries": max_retries,
-                    "is_final_failure": is_final_failure,
-                    "timestamp": datetime.now(UTC).isoformat(),
-                },
-            })
+
+            await ws_manager.broadcast(
+                {
+                    "type": "task_notification",
+                    "data": {
+                        "notification_type": "task_failed",
+                        "task_id": task_id,
+                        "task_name": task_name,
+                        "execution_id": execution_id,
+                        "error_message": error_message,
+                        "retry_count": retry_count,
+                        "max_retries": max_retries,
+                        "is_final_failure": is_final_failure,
+                        "timestamp": datetime.now(UTC).isoformat(),
+                    },
+                }
+            )
         except Exception as e:
             logger.debug(f"WebSocket notification failed: {e}")
 
@@ -77,17 +80,20 @@ class NotificationService:
         """Notify when a previously failed task succeeds on retry."""
         try:
             from app.api.websocket import ws_manager
-            await ws_manager.broadcast({
-                "type": "task_notification",
-                "data": {
-                    "notification_type": "task_recovered",
-                    "task_id": task_id,
-                    "task_name": task_name,
-                    "execution_id": execution_id,
-                    "retry_count": retry_count,
-                    "timestamp": datetime.now(UTC).isoformat(),
-                },
-            })
+
+            await ws_manager.broadcast(
+                {
+                    "type": "task_notification",
+                    "data": {
+                        "notification_type": "task_recovered",
+                        "task_id": task_id,
+                        "task_name": task_name,
+                        "execution_id": execution_id,
+                        "retry_count": retry_count,
+                        "timestamp": datetime.now(UTC).isoformat(),
+                    },
+                }
+            )
         except Exception as e:
             logger.debug(f"WebSocket notification failed: {e}")
 
@@ -107,15 +113,16 @@ class NotificationService:
             logger.debug("SMTP not configured, skipping email notification")
             return
 
+        host: str = settings.smtp_host
+        user: str = settings.smtp_user
         try:
-            import smtplib
-            from email.mime.text import MIMEText
-            from email.mime.multipart import MIMEMultipart
             import asyncio
+            from email.mime.multipart import MIMEMultipart
+            from email.mime.text import MIMEText
 
             subject = f"[akshare_web] 任务失败: {task_name}"
             body = (
-                f"任务 \"{task_name}\" (ID: {task_id}) 执行失败。\n\n"
+                f'任务 "{task_name}" (ID: {task_id}) 执行失败。\n\n'
                 f"执行ID: {execution_id}\n"
                 f"重试次数: {retry_count}\n"
                 f"错误信息: {error_message}\n\n"
@@ -123,27 +130,36 @@ class NotificationService:
             )
 
             msg = MIMEMultipart()
-            msg["From"] = settings.emails_from_email or settings.smtp_user
+            msg["From"] = settings.emails_from_email or user
             msg["To"] = to_email
             msg["Subject"] = subject
             msg.attach(MIMEText(body, "plain", "utf-8"))
 
             # Run SMTP in thread pool to avoid blocking
             loop = asyncio.get_running_loop()
-            await loop.run_in_executor(None, lambda: _smtp_send(
-                host=settings.smtp_host,
-                port=settings.smtp_port,
-                user=settings.smtp_user,
-                password=settings.smtp_password,
-                msg=msg,
-            ))
+            await loop.run_in_executor(
+                None,
+                lambda: _smtp_send(
+                    host=host,
+                    port=settings.smtp_port,
+                    user=user,
+                    password=settings.smtp_password,
+                    msg=msg,
+                ),
+            )
             logger.info(f"Failure notification email sent to {to_email}")
 
         except Exception as e:
             logger.warning(f"Failed to send notification email: {e}")
 
 
-def _smtp_send(host: str, port: int, user: str, password: str | None, msg) -> None:
+def _smtp_send(
+    host: str,
+    port: int,
+    user: str,
+    password: str | None,
+    msg: MIMEMultipart,
+) -> None:
     """Synchronous SMTP send helper."""
     import smtplib
 

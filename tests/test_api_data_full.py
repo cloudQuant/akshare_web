@@ -4,17 +4,20 @@ Comprehensive tests for data acquisition API endpoints.
 Covers download trigger, progress, and result endpoints.
 """
 
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, patch
+
 import pytest
 from httpx import AsyncClient
-from unittest.mock import patch, AsyncMock
-from datetime import UTC, datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.interface import InterfaceCategory, DataInterface
+from app.models.interface import DataInterface, InterfaceCategory
 from app.models.task import TaskExecution, TaskStatus
 
 
-async def _create_interface(db: AsyncSession, name: str = "test_iface", is_active: bool = True) -> DataInterface:
+async def _create_interface(
+    db: AsyncSession, name: str = "test_iface", is_active: bool = True
+) -> DataInterface:
     """Create a test interface."""
     cat = InterfaceCategory(name=f"cat_{name}", description="Test", sort_order=99)
     db.add(cat)
@@ -33,10 +36,13 @@ async def _create_interface(db: AsyncSession, name: str = "test_iface", is_activ
     return iface
 
 
-async def _create_execution(db: AsyncSession, status: TaskStatus = TaskStatus.PENDING, **kwargs) -> TaskExecution:
+async def _create_execution(
+    db: AsyncSession, status: TaskStatus = TaskStatus.PENDING, **kwargs
+) -> TaskExecution:
     """Create a test execution with required parent task."""
-    from app.models.task import ScheduledTask, ScheduleType
     import uuid
+
+    from app.models.task import ScheduledTask, ScheduleType
 
     # Create parent task if not provided
     if "task_id" not in kwargs:
@@ -70,47 +76,66 @@ class TestTriggerDownload:
     """Test download trigger endpoint."""
 
     @pytest.mark.asyncio
-    async def test_trigger_download_success(self, test_client: AsyncClient, test_user_token: str, test_db):
+    async def test_trigger_download_success(
+        self, test_client: AsyncClient, test_user_token: str, test_db
+    ):
         """Test triggering a download."""
         iface = await _create_interface(test_db, "download_test")
 
         headers = {"Authorization": f"Bearer {test_user_token}"}
         with patch("app.api.data.data_service.execute_download", new_callable=AsyncMock):
-            response = await test_client.post("/api/data/download", headers=headers, json={
-                "interface_id": iface.id,
-                "parameters": {},
-            })
+            response = await test_client.post(
+                "/api/data/download",
+                headers=headers,
+                json={
+                    "interface_id": iface.id,
+                    "parameters": {},
+                },
+            )
         assert response.status_code == 202
 
     @pytest.mark.asyncio
     async def test_trigger_download_not_found(self, test_client: AsyncClient, test_user_token: str):
         """Test triggering download for non-existent interface."""
         headers = {"Authorization": f"Bearer {test_user_token}"}
-        response = await test_client.post("/api/data/download", headers=headers, json={
-            "interface_id": 99999,
-            "parameters": {},
-        })
+        response = await test_client.post(
+            "/api/data/download",
+            headers=headers,
+            json={
+                "interface_id": 99999,
+                "parameters": {},
+            },
+        )
         assert response.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_trigger_download_inactive(self, test_client: AsyncClient, test_user_token: str, test_db):
+    async def test_trigger_download_inactive(
+        self, test_client: AsyncClient, test_user_token: str, test_db
+    ):
         """Test triggering download for inactive interface."""
         iface = await _create_interface(test_db, "inactive_dl", is_active=False)
 
         headers = {"Authorization": f"Bearer {test_user_token}"}
-        response = await test_client.post("/api/data/download", headers=headers, json={
-            "interface_id": iface.id,
-            "parameters": {},
-        })
+        response = await test_client.post(
+            "/api/data/download",
+            headers=headers,
+            json={
+                "interface_id": iface.id,
+                "parameters": {},
+            },
+        )
         assert response.status_code == 400
 
     @pytest.mark.asyncio
     async def test_trigger_download_unauthenticated(self, test_client: AsyncClient):
         """Test triggering download without auth."""
-        response = await test_client.post("/api/data/download", json={
-            "interface_id": 1,
-            "parameters": {},
-        })
+        response = await test_client.post(
+            "/api/data/download",
+            json={
+                "interface_id": 1,
+                "parameters": {},
+            },
+        )
         assert response.status_code == 401
 
 
@@ -123,7 +148,9 @@ class TestDownloadProgress:
         execution = await _create_execution(test_db, TaskStatus.PENDING)
 
         headers = {"Authorization": f"Bearer {test_user_token}"}
-        response = await test_client.get(f"/api/data/download/{execution.id}/status", headers=headers)
+        response = await test_client.get(
+            f"/api/data/download/{execution.id}/status", headers=headers
+        )
         assert response.status_code == 200
         data = response.json()
         assert data["progress"] == 0.0
@@ -132,12 +159,15 @@ class TestDownloadProgress:
     async def test_progress_running(self, test_client: AsyncClient, test_user_token: str, test_db):
         """Test progress for running execution."""
         execution = await _create_execution(
-            test_db, TaskStatus.RUNNING,
+            test_db,
+            TaskStatus.RUNNING,
             start_time=datetime.utcnow(),
         )
 
         headers = {"Authorization": f"Bearer {test_user_token}"}
-        response = await test_client.get(f"/api/data/download/{execution.id}/status", headers=headers)
+        response = await test_client.get(
+            f"/api/data/download/{execution.id}/status", headers=headers
+        )
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "running"
@@ -148,7 +178,9 @@ class TestDownloadProgress:
         execution = await _create_execution(test_db, TaskStatus.COMPLETED)
 
         headers = {"Authorization": f"Bearer {test_user_token}"}
-        response = await test_client.get(f"/api/data/download/{execution.id}/status", headers=headers)
+        response = await test_client.get(
+            f"/api/data/download/{execution.id}/status", headers=headers
+        )
         assert response.status_code == 200
         data = response.json()
         assert data["progress"] == 100.0
@@ -157,12 +189,15 @@ class TestDownloadProgress:
     async def test_progress_failed(self, test_client: AsyncClient, test_user_token: str, test_db):
         """Test progress for failed execution."""
         execution = await _create_execution(
-            test_db, TaskStatus.FAILED,
+            test_db,
+            TaskStatus.FAILED,
             error_message="Test error",
         )
 
         headers = {"Authorization": f"Bearer {test_user_token}"}
-        response = await test_client.get(f"/api/data/download/{execution.id}/status", headers=headers)
+        response = await test_client.get(
+            f"/api/data/download/{execution.id}/status", headers=headers
+        )
         assert response.status_code == 200
         data = response.json()
         assert data["progress"] == 0.0
@@ -182,12 +217,15 @@ class TestDownloadResult:
     async def test_result_success(self, test_client: AsyncClient, test_user_token: str, test_db):
         """Test result for completed execution."""
         execution = await _create_execution(
-            test_db, TaskStatus.COMPLETED,
+            test_db,
+            TaskStatus.COMPLETED,
             end_time=datetime.now(UTC),
         )
 
         headers = {"Authorization": f"Bearer {test_user_token}"}
-        response = await test_client.get(f"/api/data/download/{execution.id}/result", headers=headers)
+        response = await test_client.get(
+            f"/api/data/download/{execution.id}/result", headers=headers
+        )
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
@@ -198,7 +236,9 @@ class TestDownloadResult:
         execution = await _create_execution(test_db, TaskStatus.RUNNING)
 
         headers = {"Authorization": f"Bearer {test_user_token}"}
-        response = await test_client.get(f"/api/data/download/{execution.id}/result", headers=headers)
+        response = await test_client.get(
+            f"/api/data/download/{execution.id}/result", headers=headers
+        )
         assert response.status_code == 202
 
     @pytest.mark.asyncio
@@ -207,19 +247,24 @@ class TestDownloadResult:
         execution = await _create_execution(test_db, TaskStatus.PENDING)
 
         headers = {"Authorization": f"Bearer {test_user_token}"}
-        response = await test_client.get(f"/api/data/download/{execution.id}/result", headers=headers)
+        response = await test_client.get(
+            f"/api/data/download/{execution.id}/result", headers=headers
+        )
         assert response.status_code == 202
 
     @pytest.mark.asyncio
     async def test_result_failed(self, test_client: AsyncClient, test_user_token: str, test_db):
         """Test result for failed execution."""
         execution = await _create_execution(
-            test_db, TaskStatus.FAILED,
+            test_db,
+            TaskStatus.FAILED,
             error_message="Something went wrong",
         )
 
         headers = {"Authorization": f"Bearer {test_user_token}"}
-        response = await test_client.get(f"/api/data/download/{execution.id}/result", headers=headers)
+        response = await test_client.get(
+            f"/api/data/download/{execution.id}/result", headers=headers
+        )
         assert response.status_code == 500
 
     @pytest.mark.asyncio

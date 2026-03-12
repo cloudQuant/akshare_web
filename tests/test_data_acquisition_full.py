@@ -4,8 +4,6 @@ Comprehensive tests for data acquisition service.
 Covers DataAcquisitionService methods including progress tracking and cancellation.
 """
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import UTC, datetime
 
 from app.services.data_acquisition import DataAcquisitionService

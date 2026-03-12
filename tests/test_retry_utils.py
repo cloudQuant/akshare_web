@@ -4,10 +4,9 @@ Retry utility tests.
 Tests for the retry decorators used in data fetch operations.
 """
 
+from unittest.mock import Mock
+
 import pytest
-import asyncio
-import logging
-from unittest.mock import Mock, patch
 
 
 class TestRetryOnException:
@@ -57,11 +56,7 @@ class TestRetryOnException:
         """Test retry with custom exception types."""
         from app.data_fetch.utils.retry import retry_on_exception
 
-        @retry_on_exception(
-            max_retries=2,
-            retry_delay=0,
-            allowed_exceptions=(ValueError,)
-        )
+        @retry_on_exception(max_retries=2, retry_delay=0, allowed_exceptions=(ValueError,))
         def selective_function():
             raise TypeError("Different error")
 
@@ -98,8 +93,9 @@ class TestRetryOnException:
 
     def test_retry_on_exception_exponential_backoff(self):
         """Test exponential backoff in retry delays."""
-        from app.data_fetch.utils.retry import retry_on_exception
         import time
+
+        from app.data_fetch.utils.retry import retry_on_exception
 
         call_times = []
 
@@ -180,8 +176,8 @@ class TestRetryIntegration:
         """Test both sync and async decorators are available."""
         from app.data_fetch.utils import retry
 
-        assert hasattr(retry, 'retry_on_exception')
-        assert hasattr(retry, 'async_retry_on_exception')
+        assert hasattr(retry, "retry_on_exception")
+        assert hasattr(retry, "async_retry_on_exception")
 
     def test_decorator_chaining(self):
         """Test that decorators can be chained."""
@@ -190,6 +186,7 @@ class TestRetryIntegration:
         def other_decorator(func):
             def wrapper(*args, **kwargs):
                 return func(*args, **kwargs)
+
             return wrapper
 
         @other_decorator

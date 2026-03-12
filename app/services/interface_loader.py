@@ -7,11 +7,11 @@ Discovers and loads akshare data interface definitions.
 import inspect
 from typing import Any
 
-import akshare as ak
 from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import akshare as ak
 from app.core.database import async_session_maker
 from app.models.interface import (
     DataInterface,
@@ -118,14 +118,12 @@ class InterfaceLoader:
     async def _load_interface(
         self,
         func_name: str,
-        func: Any,
+        func: Any,  # noqa: ANN401
         db: AsyncSession,
     ) -> None:
         """Load a single interface definition."""
         # Check if already exists
-        result = await db.execute(
-            select(DataInterface).where(DataInterface.name == func_name)
-        )
+        result = await db.execute(select(DataInterface).where(DataInterface.name == func_name))
         if result.scalar_one_or_none() is not None:
             return  # Already loaded
 
@@ -251,39 +249,37 @@ class InterfaceLoader:
                 display_name=self._generate_display_name(param_name),
                 param_type=self._map_parameter_type(param.annotation),
                 description=f"Parameter: {param_name}",
-                default_value=str(param.default) if param.default != inspect.Parameter.empty else None,
+                default_value=str(param.default)
+                if param.default != inspect.Parameter.empty
+                else None,
                 required=param.default == inspect.Parameter.empty,
                 sort_order=i,
             )
             db.add(param_def)
 
-    def _get_type_name(self, annotation: Any) -> str:
+    def _get_type_name(self, annotation: Any) -> str:  # noqa: ANN401
         """Get type name from annotation."""
-        if annotation == inspect.Parameter.empty:
+        if annotation is inspect.Parameter.empty or annotation is str:
             return "string"
-        elif annotation == str:
-            return "string"
-        elif annotation == int:
+        if annotation is int:
             return "integer"
-        elif annotation == float:
+        if annotation is float:
             return "float"
-        elif annotation == bool:
+        if annotation is bool:
             return "boolean"
-        else:
-            return "string"
+        return "string"
 
-    def _map_parameter_type(self, annotation: Any) -> ParameterType:
+    def _map_parameter_type(self, annotation: Any) -> ParameterType:  # noqa: ANN401
         """Map Python type to ParameterType enum."""
-        if annotation == str or annotation == inspect.Parameter.empty:
+        if annotation is str or annotation is inspect.Parameter.empty:
             return ParameterType.STRING
-        elif annotation == int:
+        if annotation is int:
             return ParameterType.INTEGER
-        elif annotation == float:
+        if annotation is float:
             return ParameterType.FLOAT
-        elif annotation == bool:
+        if annotation is bool:
             return ParameterType.BOOLEAN
-        else:
-            return ParameterType.STRING
+        return ParameterType.STRING
 
 
 # Singleton instance

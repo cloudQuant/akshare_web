@@ -4,6 +4,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import type { LoginRequest } from '@/types'
+import { getErrorMessage } from '@/utils/error'
 
 const router = useRouter()
 const route = useRoute()
@@ -40,9 +41,10 @@ async function handleLogin() {
     // Redirect to the page user was trying to access
     const redirect = route.query.redirect as string
     router.push(redirect || '/')
-  } catch (error: any) {
-    if (error?.message) {
-      ElMessage.error(error.message)
+  } catch (error: unknown) {
+    const msg = getErrorMessage(error)
+    if (msg) {
+      ElMessage.error(msg)
     }
   } finally {
     loading.value = false
@@ -71,7 +73,10 @@ function goToRegister() {
         label-width="80px"
         @submit.prevent="handleLogin"
       >
-        <el-form-item label="邮箱" prop="email">
+        <el-form-item
+          label="邮箱"
+          prop="email"
+        >
           <el-input
             v-model="form.email"
             type="email"
@@ -80,7 +85,10 @@ function goToRegister() {
           />
         </el-form-item>
 
-        <el-form-item label="密码" prop="password">
+        <el-form-item
+          label="密码"
+          prop="password"
+        >
           <el-input
             v-model="form.password"
             type="password"
@@ -103,7 +111,11 @@ function goToRegister() {
         </el-form-item>
 
         <el-form-item>
-          <el-button text style="width: 100%" @click="goToRegister">
+          <el-button
+            text
+            style="width: 100%"
+            @click="goToRegister"
+          >
             还没有账户？立即注册
           </el-button>
         </el-form-item>

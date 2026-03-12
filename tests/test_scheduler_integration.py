@@ -7,17 +7,16 @@ execution flow using mocked APScheduler and database.
 
 import asyncio
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.task import ScheduledTask, ScheduleType, TaskExecution, TaskStatus, TriggeredBy
-from app.models.data_script import DataScript
-from app.models.user import User, UserRole
 from app.core.security import hash_password
+from app.models.data_script import DataScript
+from app.models.task import ScheduledTask, ScheduleType, TaskStatus, TriggeredBy
+from app.models.user import User, UserRole
 
 
 @pytest_asyncio.fixture
@@ -63,6 +62,7 @@ class TestSchedulerTriggerConfig:
 
     def setup_method(self):
         from app.services.scheduler import TaskScheduler
+
         self.scheduler = TaskScheduler()
 
     def _make_task(self, schedule_type, expression):

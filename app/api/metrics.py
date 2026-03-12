@@ -5,8 +5,8 @@ Exposes request counts, latency histograms, and task execution stats
 in Prometheus text exposition format without requiring a heavy client library.
 """
 
-import time
 import threading
+import time
 from collections import defaultdict
 from typing import Any
 
@@ -18,7 +18,7 @@ router = APIRouter()
 class _Metrics:
     """Thread-safe in-process metrics collector."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._lock = threading.Lock()
         self._request_count: dict[str, int] = defaultdict(int)  # method:path:status -> count
         self._request_duration_sum: dict[str, float] = defaultdict(float)
@@ -26,7 +26,7 @@ class _Metrics:
         self._start_time = time.time()
 
     def record_request(self, method: str, path: str, status: int, duration_s: float) -> None:
-        key = f'{method}:{path}:{status}'
+        key = f"{method}:{path}:{status}"
         with self._lock:
             self._request_count[key] += 1
             self._request_duration_sum[key] += duration_s
@@ -51,7 +51,7 @@ class _Metrics:
 
         lines.append("# HELP akshare_uptime_seconds Time since process start")
         lines.append("# TYPE akshare_uptime_seconds gauge")
-        lines.append(f'akshare_uptime_seconds {snap["uptime_seconds"]:.1f}')
+        lines.append(f"akshare_uptime_seconds {snap['uptime_seconds']:.1f}")
 
         lines.append("# HELP akshare_http_requests_total Total HTTP requests")
         lines.append("# TYPE akshare_http_requests_total counter")
@@ -63,7 +63,9 @@ class _Metrics:
                 f'akshare_http_requests_total{{method="{method}",path="{norm_path}",status="{status}"}} {count}'
             )
 
-        lines.append("# HELP akshare_http_request_duration_seconds_total Sum of HTTP request durations")
+        lines.append(
+            "# HELP akshare_http_request_duration_seconds_total Sum of HTTP request durations"
+        )
         lines.append("# TYPE akshare_http_request_duration_seconds_total counter")
         for key, total in snap["request_duration_sum"].items():
             method, path, status = key.rsplit(":", 2)
@@ -98,7 +100,7 @@ metrics = _Metrics()
 
 
 @router.get("/metrics")
-async def prometheus_metrics():
+async def prometheus_metrics() -> Response:
     """Prometheus-compatible metrics endpoint."""
     return Response(
         content=metrics.to_prometheus(),

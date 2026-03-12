@@ -4,7 +4,6 @@ Services module extended tests.
 Additional tests for service layer functionality.
 """
 
-import pytest
 from unittest.mock import AsyncMock
 
 
@@ -25,7 +24,7 @@ class TestSchedulerServiceExtended:
         service = SchedulerService()
 
         # Check for key methods
-        methods = ['start', 'shutdown']
+        methods = ["start", "shutdown"]
         for method in methods:
             assert hasattr(service, method)
 
@@ -71,12 +70,12 @@ class TestServiceInitialization:
     def test_services_module_exports(self):
         """Test services module exports all expected services."""
         from app.services import (
-            script_service,
-            execution_service,
-            scheduler_service,
             data_acquisition,
+            execution_service,
             interface_loader,
             retry_service,
+            scheduler_service,
+            script_service,
         )
 
         assert script_service is not None
@@ -94,8 +93,8 @@ class TestRetryServiceExtended:
         """Test RetryService constants."""
         from app.services.retry_service import RetryService
 
-        assert hasattr(RetryService, 'BASE_RETRY_DELAY')
-        assert hasattr(RetryService, 'MAX_RETRY_DELAY')
+        assert hasattr(RetryService, "BASE_RETRY_DELAY")
+        assert hasattr(RetryService, "MAX_RETRY_DELAY")
         assert RetryService.BASE_RETRY_DELAY > 0
         assert RetryService.MAX_RETRY_DELAY > 0
 
@@ -165,7 +164,7 @@ class TestInterfaceLoaderService:
         """Test category mapping."""
         from app.services.interface_loader import InterfaceLoader
 
-        assert hasattr(InterfaceLoader, 'CATEGORY_MAPPING')
+        assert hasattr(InterfaceLoader, "CATEGORY_MAPPING")
         assert isinstance(InterfaceLoader.CATEGORY_MAPPING, dict)
 
 
@@ -192,10 +191,10 @@ class TestServicesIntegration:
     def test_all_services_can_be_imported(self):
         """Test all service modules can be imported."""
         from app.services import (
-            script_service,
+            data_acquisition,
             execution_service,
             scheduler_service,
-            data_acquisition,
+            script_service,
         )
 
         # All should be importable

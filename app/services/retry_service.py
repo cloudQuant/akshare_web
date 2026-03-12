@@ -5,15 +5,12 @@ Implements automatic retry mechanism for failed task executions.
 """
 
 import asyncio
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
-from sqlalchemy import select
+from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.task import ScheduledTask, TaskExecution, TaskStatus
-from app.services.scheduler import task_scheduler
-
-from loguru import logger
 
 
 class RetryService:
@@ -29,7 +26,7 @@ class RetryService:
     # Maximum delay between retries (in seconds)
     MAX_RETRY_DELAY = 3600  # 1 hour
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession) -> None:
         self.db = db
         self._retry_queue: dict[str, asyncio.Task] = {}
 
@@ -53,10 +50,7 @@ class RetryService:
             return False
 
         # Check if execution status is failed
-        if execution.status != TaskStatus.FAILED:
-            return False
-
-        return True
+        return execution.status == TaskStatus.FAILED
 
     def calculate_retry_delay(self, retry_count: int) -> int:
         """
@@ -68,8 +62,8 @@ class RetryService:
         Returns:
             Delay in seconds
         """
-        delay = self.BASE_RETRY_DELAY * (2 ** retry_count)
-        return min(delay, self.MAX_RETRY_DELAY)
+        delay = self.BASE_RETRY_DELAY * (2**retry_count)
+        return int(min(delay, self.MAX_RETRY_DELAY))
 
     async def schedule_retry(self, execution: TaskExecution, task: ScheduledTask) -> bool:
         """
@@ -98,21 +92,18 @@ class RetryService:
         )
 
         # Schedule retry with delay
-        async def retry_task():
+        async def _do_retry() -> None:
             await asyncio.sleep(delay)
             await self.execute_retry(execution, task, retry_count)
 
         # Store the retry task
-        retry_task = asyncio.create_task(retry_task())
-        self._retry_queue[execution.execution_id] = retry_task
+        task_handle = asyncio.create_task(_do_retry())
+        self._retry_queue[execution.execution_id] = task_handle
 
         return True
 
     async def execute_retry(
-        self,
-        original_execution: TaskExecution,
-        task: ScheduledTask,
-        retry_count: int
+        self, original_execution: TaskExecution, task: ScheduledTask, retry_count: int
     ) -> bool:
         """
         Execute a retry attempt.
@@ -257,10 +248,7 @@ class RetryService:
         Returns:
             List of execution IDs
         """
-        return [
-            eid for eid, task in self._retry_queue.items()
-            if not task.done()
-        ]
+        return [eid for eid, task in self._retry_queue.items() if not task.done()]
 
     async def cleanup_completed_retries(self) -> int:
         """
@@ -269,10 +257,7 @@ class RetryService:
         Returns:
             Number of tasks removed
         """
-        to_remove = [
-            eid for eid, task in self._retry_queue.items()
-            if task.done()
-        ]
+        to_remove = [eid for eid, task in self._retry_queue.items() if task.done()]
 
         for eid in to_remove:
             del self._retry_queue[eid]

@@ -2,21 +2,50 @@
 Utility function tests.
 """
 
-import pytest
+import decimal
+from datetime import date, datetime
 
 from app.utils.helpers import (
-    generate_table_name,
     clean_column_names,
-    format_size,
     format_duration,
+    format_size,
+    generate_table_name,
     truncate_string,
 )
+from app.utils.serialization import serialize_for_csv, serialize_for_json
 from app.utils.validators import (
     validate_email,
+    validate_password,
     validate_schedule_expression,
     validate_username,
-    validate_password,
 )
+
+
+class TestSerialization:
+    """Test value serialization for JSON/CSV."""
+
+    def test_serialize_for_json_decimal(self):
+        """Test Decimal serializes to float for JSON."""
+        assert serialize_for_json(decimal.Decimal("3.14")) == 3.14
+
+    def test_serialize_for_json_date(self):
+        """Test date serializes to isoformat."""
+        d = date(2024, 1, 15)
+        assert serialize_for_json(d) == "2024-01-15"
+
+    def test_serialize_for_json_datetime(self):
+        """Test datetime serializes to isoformat."""
+        dt = datetime(2024, 1, 15, 10, 30)
+        assert serialize_for_json(dt) == "2024-01-15T10:30:00"
+
+    def test_serialize_for_csv_decimal(self):
+        """Test Decimal serializes to str for CSV."""
+        assert serialize_for_csv(decimal.Decimal("3.14")) == "3.14"
+
+    def test_serialize_for_csv_passthrough(self):
+        """Test non-special types pass through."""
+        assert serialize_for_csv(42) == 42
+        assert serialize_for_csv("hello") == "hello"
 
 
 class TestHelpers:
@@ -113,11 +142,12 @@ class TestValidators:
         assert validate_username("user@name")[0] is False  # Invalid chars
 
     def test_validate_password_valid(self):
-        """Test valid passwords."""
+        """Test valid passwords (min 8 chars, letter + digit)."""
         assert validate_password("password123")[0] is True
-        assert validate_password("abc123")[0] is True
+        assert validate_password("abc12345")[0] is True
 
     def test_validate_password_invalid(self):
         """Test invalid passwords."""
         assert validate_password("")[0] is False
         assert validate_password("12345")[0] is False  # Too short
+        assert validate_password("12345678")[0] is False  # No letter

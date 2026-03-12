@@ -2,13 +2,12 @@
 Tests for RetryService covering schedule_retry, execute_retry (lines 104, 129-216).
 """
 
-import pytest
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
-from datetime import datetime, UTC
 
-from app.services.retry_service import RetryService
+import pytest
+
 from app.models.task import TaskStatus
+from app.services.retry_service import RetryService
 
 
 @pytest.fixture
@@ -79,12 +78,16 @@ class TestExecuteRetry:
 
         # Create a fake data_service module
         import types
+
         fake_ds = types.ModuleType("app.services.data_service")
         fake_ds.DataService = mock_ds_cls
 
         import sys
-        with patch.dict(sys.modules, {"app.services.data_service": fake_ds}), \
-             patch("app.services.execution_service.ExecutionService", mock_es_cls):
+
+        with (
+            patch.dict(sys.modules, {"app.services.data_service": fake_ds}),
+            patch("app.services.execution_service.ExecutionService", mock_es_cls),
+        ):
             result = await svc.execute_retry(original_exec, task, 1)
         assert result is True
 
@@ -112,13 +115,17 @@ class TestExecuteRetry:
         mock_ds_cls = MagicMock()
         mock_ds_cls.return_value.execute_script = AsyncMock(side_effect=RuntimeError("fail"))
 
-        import types, sys
+        import sys
+        import types
+
         fake_ds = types.ModuleType("app.services.data_service")
         fake_ds.DataService = mock_ds_cls
 
-        with patch.dict(sys.modules, {"app.services.data_service": fake_ds}), \
-             patch("app.services.execution_service.ExecutionService", mock_es_cls), \
-             patch.object(svc, 'should_retry', new_callable=AsyncMock, return_value=False):
+        with (
+            patch.dict(sys.modules, {"app.services.data_service": fake_ds}),
+            patch("app.services.execution_service.ExecutionService", mock_es_cls),
+            patch.object(svc, "should_retry", new_callable=AsyncMock, return_value=False),
+        ):
             result = await svc.execute_retry(original_exec, task, 1)
         assert result is False
 

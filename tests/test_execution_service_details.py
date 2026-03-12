@@ -4,15 +4,16 @@ Execution service detailed tests.
 Tests for ExecutionService methods.
 """
 
-import pytest
 from datetime import UTC, datetime
+
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
 async def create_user_script_task(test_db, suffix):
     """Helper to create user, script, and task."""
-    from app.models.task import ScheduledTask
     from app.models.data_script import DataScript
+    from app.models.task import ScheduledTask
     from app.models.user import User
 
     # Create user first and commit to get ID
@@ -55,8 +56,8 @@ class TestExecutionServiceCreate:
     @pytest.mark.asyncio
     async def test_create_execution(self, test_db: AsyncSession):
         """Test creating an execution record."""
-        from app.services.execution_service import ExecutionService
         from app.models.task import TaskStatus
+        from app.services.execution_service import ExecutionService
 
         user, script, task = await create_user_script_task(test_db, "1")
 
@@ -78,8 +79,8 @@ class TestExecutionServiceCreate:
     @pytest.mark.asyncio
     async def test_create_execution_with_task_not_found(self, test_db: AsyncSession):
         """Test creating execution for non-existent task."""
-        from app.services.execution_service import ExecutionService
         from app.models.data_script import DataScript
+        from app.services.execution_service import ExecutionService
 
         service = ExecutionService(test_db)
 
@@ -111,8 +112,8 @@ class TestExecutionServiceUpdate:
     @pytest.mark.asyncio
     async def test_update_execution_status(self, test_db: AsyncSession):
         """Test updating execution status."""
-        from app.services.execution_service import ExecutionService
         from app.models.task import TaskStatus
+        from app.services.execution_service import ExecutionService
 
         user, script, task = await create_user_script_task(test_db, "2")
 
@@ -141,8 +142,8 @@ class TestExecutionServiceUpdate:
     @pytest.mark.asyncio
     async def test_update_execution_complete(self, test_db: AsyncSession):
         """Test marking execution as complete."""
-        from app.services.execution_service import ExecutionService
         from app.models.task import TaskStatus
+        from app.services.execution_service import ExecutionService
 
         user, script, task = await create_user_script_task(test_db, "3")
 
@@ -241,8 +242,8 @@ class TestExecutionServiceStats:
     @pytest.mark.asyncio
     async def test_get_execution_stats_with_data(self, test_db: AsyncSession):
         """Test stats with execution data."""
-        from app.services.execution_service import ExecutionService
         from app.models.task import TaskStatus
+        from app.services.execution_service import ExecutionService
 
         user, script, task = await create_user_script_task(test_db, "6")
 

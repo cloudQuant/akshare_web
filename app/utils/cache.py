@@ -12,12 +12,12 @@ from typing import Any
 class TTLCache:
     """Thread-safe in-memory cache with per-key TTL."""
 
-    def __init__(self, default_ttl: int = 60):
+    def __init__(self, default_ttl: int = 60) -> None:
         self._store: dict[str, tuple[Any, float]] = {}  # key -> (value, expiry)
         self._lock = threading.Lock()
         self._default_ttl = default_ttl
 
-    def get(self, key: str) -> Any | None:
+    def get(self, key: str) -> Any | None:  # noqa: ANN401
         """Get value if key exists and hasn't expired."""
         with self._lock:
             entry = self._store.get(key)
@@ -29,7 +29,7 @@ class TTLCache:
                 return None
             return value
 
-    def set(self, key: str, value: Any, ttl: int | None = None) -> None:
+    def set(self, key: str, value: Any, ttl: int | None = None) -> None:  # noqa: ANN401
         """Set value with TTL in seconds."""
         expiry = time.time() + (ttl if ttl is not None else self._default_ttl)
         with self._lock:

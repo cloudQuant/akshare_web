@@ -34,7 +34,7 @@ class TestListInterfaces:
     @pytest.mark.asyncio
     async def test_list_interfaces_with_category_filter(self, test_client: AsyncClient, test_db):
         """Test listing interfaces filtered by category."""
-        from app.models.interface import InterfaceCategory, DataInterface
+        from app.models.interface import DataInterface, InterfaceCategory
 
         cat = InterfaceCategory(name="test_filter_cat", description="Test", sort_order=99)
         test_db.add(cat)
@@ -77,7 +77,7 @@ class TestGetInterface:
     @pytest.mark.asyncio
     async def test_get_interface(self, test_client: AsyncClient, test_db):
         """Test getting interface details."""
-        from app.models.interface import InterfaceCategory, DataInterface
+        from app.models.interface import DataInterface, InterfaceCategory
 
         cat = InterfaceCategory(name="get_test_cat", description="Test", sort_order=99)
         test_db.add(cat)
@@ -109,7 +109,9 @@ class TestCreateInterface:
     """Test create interface endpoint."""
 
     @pytest.mark.asyncio
-    async def test_create_interface_as_admin(self, test_client: AsyncClient, test_admin_token: str, test_db):
+    async def test_create_interface_as_admin(
+        self, test_client: AsyncClient, test_admin_token: str, test_db
+    ):
         """Test creating interface as admin."""
         from app.models.interface import InterfaceCategory
 
@@ -126,7 +128,9 @@ class TestCreateInterface:
         assert response.status_code == 201
 
     @pytest.mark.asyncio
-    async def test_create_interface_invalid_category(self, test_client: AsyncClient, test_admin_token: str):
+    async def test_create_interface_invalid_category(
+        self, test_client: AsyncClient, test_admin_token: str
+    ):
         """Test creating interface with invalid category."""
         headers = {"Authorization": f"Bearer {test_admin_token}"}
         response = await test_client.post(
@@ -152,7 +156,7 @@ class TestUpdateInterface:
     @pytest.mark.asyncio
     async def test_update_interface(self, test_client: AsyncClient, test_admin_token: str, test_db):
         """Test updating interface."""
-        from app.models.interface import InterfaceCategory, DataInterface
+        from app.models.interface import DataInterface, InterfaceCategory
 
         cat = InterfaceCategory(name="upd_cat", description="Test", sort_order=99)
         test_db.add(cat)
@@ -176,7 +180,9 @@ class TestUpdateInterface:
         assert response.status_code == 200
 
     @pytest.mark.asyncio
-    async def test_update_nonexistent_interface(self, test_client: AsyncClient, test_admin_token: str):
+    async def test_update_nonexistent_interface(
+        self, test_client: AsyncClient, test_admin_token: str
+    ):
         """Test updating non-existent interface."""
         headers = {"Authorization": f"Bearer {test_admin_token}"}
         response = await test_client.put(
@@ -192,7 +198,7 @@ class TestDeleteInterface:
     @pytest.mark.asyncio
     async def test_delete_interface(self, test_client: AsyncClient, test_admin_token: str, test_db):
         """Test deleting interface."""
-        from app.models.interface import InterfaceCategory, DataInterface
+        from app.models.interface import DataInterface, InterfaceCategory
 
         cat = InterfaceCategory(name="del_cat", description="Test", sort_order=99)
         test_db.add(cat)
@@ -213,7 +219,9 @@ class TestDeleteInterface:
         assert response.status_code == 200
 
     @pytest.mark.asyncio
-    async def test_delete_nonexistent_interface(self, test_client: AsyncClient, test_admin_token: str):
+    async def test_delete_nonexistent_interface(
+        self, test_client: AsyncClient, test_admin_token: str
+    ):
         """Test deleting non-existent interface."""
         headers = {"Authorization": f"Bearer {test_admin_token}"}
         response = await test_client.delete("/api/data/interfaces/99999", headers=headers)

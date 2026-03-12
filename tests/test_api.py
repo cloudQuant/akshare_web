@@ -40,7 +40,7 @@ class TestScriptsAPI:
             try:
                 error_data = response.json()
                 print(f"Error data: {error_data}")
-            except:
+            except Exception:
                 pass
 
         assert response.status_code == 200
@@ -52,8 +52,7 @@ class TestScriptsAPI:
         """Test getting scripts with category filter."""
         headers = {"Authorization": f"Bearer {test_user_token}"}
         response = await test_client.get(
-            "/api/scripts/?category=stocks&page=1&page_size=10",
-            headers=headers
+            "/api/scripts/?category=stocks&page=1&page_size=10", headers=headers
         )
 
         assert response.status_code == 200
@@ -97,14 +96,16 @@ class TestScriptsAPI:
                 "script_name": "New Script",
                 "category": "custom",
                 "module_path": "custom.path",
-            }
+            },
         )
 
         # Regular user should be forbidden
         assert response.status_code in [401, 403]
 
     @pytest.mark.asyncio
-    async def test_create_script_admin_success(self, test_client: AsyncClient, test_admin_token: str):
+    async def test_create_script_admin_success(
+        self, test_client: AsyncClient, test_admin_token: str
+    ):
         """Test creating script as admin."""
         headers = {"Authorization": f"Bearer {test_admin_token}"}
         response = await test_client.post(
@@ -116,7 +117,7 @@ class TestScriptsAPI:
                 "category": "custom",
                 "module_path": "custom.module",
                 "frequency": "daily",
-            }
+            },
         )
 
         # Should succeed or already exists
@@ -129,7 +130,7 @@ class TestScriptsAPI:
         response = await test_client.put(
             "/api/scripts/admin/scripts/custom_script",
             headers=headers,
-            json={"script_name": "Updated Name"}
+            json={"script_name": "Updated Name"},
         )
 
         # Should succeed or not found
@@ -140,8 +141,7 @@ class TestScriptsAPI:
         """Test deleting script as admin."""
         headers = {"Authorization": f"Bearer {test_admin_token}"}
         response = await test_client.delete(
-            "/api/scripts/admin/scripts/custom_script",
-            headers=headers
+            "/api/scripts/admin/scripts/custom_script", headers=headers
         )
 
         # Should succeed or not found
@@ -175,7 +175,7 @@ class TestTasksAPI:
                 "schedule_type": "daily",
                 "schedule_expression": "15:00",
                 "is_active": True,
-            }
+            },
         )
 
         # May succeed or fail validation
@@ -195,9 +195,7 @@ class TestTasksAPI:
         """Test updating a task."""
         headers = {"Authorization": f"Bearer {test_user_token}"}
         response = await test_client.put(
-            "/api/tasks/1",
-            headers=headers,
-            json={"name": "Updated Task Name"}
+            "/api/tasks/1", headers=headers, json={"name": "Updated Task Name"}
         )
 
         # May exist or not
@@ -254,12 +252,13 @@ class TestExecutionsAPI:
         assert "data" in data
 
     @pytest.mark.asyncio
-    async def test_get_executions_with_filters(self, test_client: AsyncClient, test_user_token: str):
+    async def test_get_executions_with_filters(
+        self, test_client: AsyncClient, test_user_token: str
+    ):
         """Test getting executions with status filter."""
         headers = {"Authorization": f"Bearer {test_user_token}"}
         response = await test_client.get(
-            "/api/executions/?status=completed&page=1&page_size=20",
-            headers=headers
+            "/api/executions/?status=completed&page=1&page_size=20", headers=headers
         )
 
         assert response.status_code == 200
@@ -288,9 +287,7 @@ class TestExecutionsAPI:
         """Test deleting executions (admin only)."""
         headers = {"Authorization": f"Bearer {test_admin_token}"}
         response = await test_client.delete(
-            "/api/executions/",
-            headers=headers,
-            params={"execution_ids": ["exec1", "exec2"]}
+            "/api/executions/", headers=headers, params={"execution_ids": ["exec1", "exec2"]}
         )
 
         # Should succeed, not found, or validation error
@@ -333,8 +330,7 @@ class TestTablesAPI:
         """Test getting table data."""
         headers = {"Authorization": f"Bearer {test_user_token}"}
         response = await test_client.get(
-            "/api/tables/ak_test_table/data?page=1&page_size=10",
-            headers=headers
+            "/api/tables/ak_test_table/data?page=1&page_size=10", headers=headers
         )
 
         # May exist or not (422 = validation error for string ID)
@@ -364,12 +360,13 @@ class TestInterfacesAPI:
         assert "data" in data
 
     @pytest.mark.asyncio
-    async def test_get_interfaces_with_category(self, test_client: AsyncClient, test_user_token: str):
+    async def test_get_interfaces_with_category(
+        self, test_client: AsyncClient, test_user_token: str
+    ):
         """Test getting interfaces filtered by category."""
         headers = {"Authorization": f"Bearer {test_user_token}"}
         response = await test_client.get(
-            "/api/data/interfaces/?category=stock&page=1&page_size=20",
-            headers=headers
+            "/api/data/interfaces/?category=stock&page=1&page_size=20", headers=headers
         )
 
         assert response.status_code == 200
@@ -388,8 +385,7 @@ class TestInterfacesAPI:
         """Test searching interfaces."""
         headers = {"Authorization": f"Bearer {test_user_token}"}
         response = await test_client.get(
-            "/api/data/interfaces/?search=stock&page=1&page_size=20",
-            headers=headers
+            "/api/data/interfaces/?search=stock&page=1&page_size=20", headers=headers
         )
 
         assert response.status_code == 200
@@ -416,7 +412,9 @@ class TestSettingsAPI:
         assert response.status_code in [200, 404, 500]
 
     @pytest.mark.asyncio
-    async def test_get_warehouse_config_admin(self, test_client: AsyncClient, test_admin_token: str):
+    async def test_get_warehouse_config_admin(
+        self, test_client: AsyncClient, test_admin_token: str
+    ):
         """Test getting warehouse config as admin."""
         headers = {"Authorization": f"Bearer {test_admin_token}"}
         response = await test_client.get("/api/settings/database/warehouse", headers=headers)
@@ -437,7 +435,7 @@ class TestSettingsAPI:
                 "database": "test_db",
                 "user": "test",
                 "password": "test",
-            }
+            },
         )
 
         # Should return test result (may fail connection)
@@ -471,11 +469,7 @@ class TestUsersAPI:
     async def test_update_user_admin(self, test_client: AsyncClient, test_admin_token: str):
         """Test updating a user as admin."""
         headers = {"Authorization": f"Bearer {test_admin_token}"}
-        response = await test_client.put(
-            "/api/users/1",
-            headers=headers,
-            json={"is_active": False}
-        )
+        response = await test_client.put("/api/users/1", headers=headers, json={"is_active": False})
 
         # May exist or not
         assert response.status_code in [200, 404]
@@ -503,7 +497,7 @@ class TestDataAPI:
             json={
                 "script_id": "stock_zh_a_hist",
                 "parameters": {"symbol": "000001"},
-            }
+            },
         )
 
         # May succeed, fail validation, or not found

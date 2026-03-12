@@ -6,15 +6,14 @@ Provides async database session management using SQLAlchemy.
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import Any
 
 from loguru import logger
+from sqlalchemy import MetaData, select
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
-from sqlalchemy import MetaData, select, text
 from sqlalchemy.orm import DeclarativeBase
 
 from app.core.config import settings
@@ -28,8 +27,8 @@ class Base(DeclarativeBase):
 
     metadata = metadata
 
-    # Allow table redefinition for development
-    __table_args__ = {
+    # Allow table redefinition for development (SQLAlchemy expects this dict)
+    __table_args__ = {  # noqa: RUF012
         "extend_existing": True,
         "mysql_charset": "utf8mb4",
         "mysql_collate": "utf8mb4_unicode_ci",
@@ -134,10 +133,11 @@ async def init_db() -> None:
     Creates database tables if they don't exist and initializes
     default data like admin user and system settings.
     """
-    from app.core.security import hash_password
-    from app.models.user import User, UserRole
-    from app.models.interface import DataInterface, InterfaceCategory
     from sqlalchemy import select
+
+    from app.core.security import hash_password
+    from app.models.interface import InterfaceCategory
+    from app.models.user import User, UserRole
 
     async with async_session_maker() as session:
         # Check if database is already initialized
@@ -149,6 +149,7 @@ async def init_db() -> None:
         # Create default admin user (password from env or generated)
         import os
         import secrets
+
         default_pw = os.getenv("ADMIN_DEFAULT_PASSWORD") or secrets.token_urlsafe(16)
         if not os.getenv("ADMIN_DEFAULT_PASSWORD"):
             logger.warning(
@@ -209,6 +210,6 @@ async def check_db_connection() -> bool:
         async with async_session_maker() as session:
             await session.execute(select(1))
         return True
-    except Exception as e:
-        logger.error(f"Database connection failed: {e}")
+    except Exception:
+        logger.exception("Database connection failed")
         return False

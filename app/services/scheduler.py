@@ -6,18 +6,16 @@ Integrates with SchedulerService and ExecutionService.
 """
 
 import asyncio
-import uuid
 from datetime import UTC, datetime
-from typing import Any
 
 from loguru import logger
 
-from app.core.config import settings
 from app.core.database import async_session_maker
 from app.models.task import ScheduledTask, ScheduleType, TaskStatus, TriggeredBy
-from app.services.scheduler_service import get_scheduler_service, init_scheduler_service
 from app.services.execution_service import ExecutionService
+from app.services.scheduler_service import init_scheduler_service
 from app.services.script_service import ScriptService
+from app.utils.db_result import get_rowcount
 
 
 class TaskScheduler:
@@ -27,7 +25,7 @@ class TaskScheduler:
     Provides async task scheduling, execution, and retry logic.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._running = False
         self.scheduler_service = None
         self._running_tasks: dict[int, asyncio.Task] = {}  # task_id -> asyncio.Task
@@ -81,7 +79,7 @@ class TaskScheduler:
 
         async with async_session_maker() as db:
             result = await db.execute(
-                select(ScheduledTask).where(ScheduledTask.is_active == True)
+                select(ScheduledTask).where(ScheduledTask.is_active.is_(True))
             )
             tasks = result.scalars().all()
 
@@ -116,22 +114,19 @@ class TaskScheduler:
 
         if task.schedule_type == ScheduleType.CRON:
             return "cron", {"cron_expression": schedule_expr}
-        elif task.schedule_type == ScheduleType.DAILY:
-            # Format: "HH:MM"
+        if task.schedule_type == ScheduleType.DAILY:
+            # Expected format: HH:MM (e.g. 09:30)
             if ":" in schedule_expr:
                 hour, minute = schedule_expr.split(":")
                 cron_expr = f"{minute} {hour} * * *"
                 return "cron", {"cron_expression": cron_expr}
             return "cron", {"cron_expression": schedule_expr}
-        elif task.schedule_type == ScheduleType.WEEKLY:
+        if task.schedule_type == ScheduleType.WEEKLY or task.schedule_type == ScheduleType.MONTHLY:
             return "cron", {"cron_expression": schedule_expr}
-        elif task.schedule_type == ScheduleType.MONTHLY:
-            return "cron", {"cron_expression": schedule_expr}
-        elif task.schedule_type == ScheduleType.INTERVAL:
-            # Parse interval like "5m", "1h", "30s"
+        if task.schedule_type == ScheduleType.INTERVAL:
+            # Parse interval (e.g. 5m, 1h, 30s)
             return "interval", self._parse_interval(schedule_expr)
-        else:
-            return "once", {}
+        return "once", {}
 
     def _parse_interval(self, interval_str: str) -> dict:
         """Parse interval string to trigger args."""
@@ -158,9 +153,7 @@ class TaskScheduler:
             from sqlalchemy import select
 
             # Get task
-            result = await db.execute(
-                select(ScheduledTask).where(ScheduledTask.id == task_id)
-            )
+            result = await db.execute(select(ScheduledTask).where(ScheduledTask.id == task_id))
             task = result.scalar_one_or_none()
 
             if task is None:
@@ -201,7 +194,9 @@ class TaskScheduler:
 
                 # Broadcast RUNNING status via WebSocket
                 await self._broadcast_status(
-                    execution.execution_id, task.id, TaskStatus.RUNNING,
+                    execution.execution_id,
+                    task.id,
+                    TaskStatus.RUNNING,
                 )
 
                 # Get table row count before execution
@@ -210,6 +205,7 @@ class TaskScheduler:
                 provider = None
                 if script and script.target_table:
                     from app.data_fetch.providers.akshare_provider import AkshareProvider
+
                     provider = AkshareProvider()
                     rows_before = provider.get_table_row_count(script.target_table)
 
@@ -226,6 +222,7 @@ class TaskScheduler:
                 if script and script.target_table:
                     if provider is None:
                         from app.data_fetch.providers.akshare_provider import AkshareProvider
+
                         provider = AkshareProvider()
                     rows_after = provider.get_table_row_count(script.target_table)
 
@@ -253,12 +250,15 @@ class TaskScheduler:
 
                     # Broadcast COMPLETED status via WebSocket
                     await self._broadcast_status(
-                        execution.execution_id, task.id, TaskStatus.COMPLETED,
-                        rows_before=rows_before, rows_after=rows_after, duration=duration,
+                        execution.execution_id,
+                        task.id,
+                        TaskStatus.COMPLETED,
+                        rows_before=rows_before,
+                        rows_after=rows_after,
+                        duration=duration,
                     )
                     return  # Success, exit retry loop
-                else:
-                    raise Exception(result.get("error", "Unknown error"))
+                raise Exception(result.get("error", "Unknown error"))
 
             except Exception as e:
                 logger.error(f"Task {task.name} (ID: {task.id}) attempt {attempt + 1} failed: {e}")
@@ -274,13 +274,16 @@ class TaskScheduler:
 
                 # Broadcast FAILED status via WebSocket
                 await self._broadcast_status(
-                    execution.execution_id, task.id, TaskStatus.FAILED,
+                    execution.execution_id,
+                    task.id,
+                    TaskStatus.FAILED,
                     error_message=str(e),
                 )
 
                 # Send failure notification (WebSocket + optional email)
                 try:
                     from app.services.notification_service import NotificationService
+
                     await NotificationService.notify_task_failed(
                         task_id=task.id,
                         task_name=task.name,
@@ -289,13 +292,13 @@ class TaskScheduler:
                         retry_count=attempt + 1,
                         max_retries=max_attempts,
                     )
-                except Exception:
-                    pass  # Notification is best-effort
+                except Exception as e:
+                    logger.debug("Task failure notification skipped: %s", e)
 
                 # If not last attempt, wait before retry
                 if attempt < max_attempts - 1:
                     # Exponential backoff: 60s, 120s, 240s...
-                    delay = 60 * (2 ** attempt)
+                    delay = 60 * (2**attempt)
                     logger.info(f"Retrying task {task.id} in {delay} seconds...")
                     await asyncio.sleep(delay)
 
@@ -351,7 +354,7 @@ class TaskScheduler:
             task_name = task.name
 
         # Background coroutine with its own session
-        async def _bg_execute():
+        async def _bg_execute() -> None:
             async with async_session_maker() as bg_db:
                 bg_result = await bg_db.execute(
                     select(ScheduledTask).where(ScheduledTask.id == task_id_val)
@@ -395,7 +398,9 @@ class TaskScheduler:
         try:
             async with async_session_maker() as db:
                 from sqlalchemy import select
+
                 from app.models.task import TaskExecution
+
                 result = await db.execute(
                     select(TaskExecution)
                     .where(TaskExecution.task_id == task_id)
@@ -432,6 +437,7 @@ class TaskScheduler:
         """Broadcast execution status change via WebSocket (best-effort)."""
         try:
             from app.api.websocket import broadcast_execution_update
+
             await broadcast_execution_update(
                 execution_id=execution_id,
                 task_id=task_id,
@@ -441,8 +447,8 @@ class TaskScheduler:
                 error_message=error_message,
                 duration=duration,
             )
-        except Exception:
-            pass  # WebSocket broadcast is best-effort; never fail the task
+        except Exception as e:
+            logger.debug("WebSocket broadcast skipped: %s", e)
 
     async def _cleanup_old_executions(self, retention_days: int = 30) -> None:
         """Delete execution records older than retention_days.
@@ -451,7 +457,9 @@ class TaskScheduler:
         Also marks stuck PENDING/RUNNING executions (older than 4 hours) as TIMEOUT.
         """
         from datetime import timedelta
-        from sqlalchemy import delete, and_, update
+
+        from sqlalchemy import and_, delete, update
+
         from app.models.task import TaskExecution
 
         cutoff = datetime.now(UTC) - timedelta(days=retention_days)
@@ -465,10 +473,12 @@ class TaskScheduler:
                     .where(
                         and_(
                             TaskExecution.created_at < stuck_cutoff,
-                            TaskExecution.status.in_([
-                                TaskStatus.PENDING,
-                                TaskStatus.RUNNING,
-                            ]),
+                            TaskExecution.status.in_(
+                                [
+                                    TaskStatus.PENDING,
+                                    TaskStatus.RUNNING,
+                                ]
+                            ),
                         )
                     )
                     .values(
@@ -477,28 +487,34 @@ class TaskScheduler:
                         error_message="Marked as timeout by housekeeping (stuck > 4 hours)",
                     )
                 )
-                stuck_count = stuck_result.rowcount
+                stuck_count = get_rowcount(stuck_result)
                 if stuck_count:
-                    logger.warning(f"Housekeeping: marked {stuck_count} stuck executions as TIMEOUT")
+                    logger.warning(
+                        f"Housekeeping: marked {stuck_count} stuck executions as TIMEOUT"
+                    )
 
                 # 2. Delete old terminal-state execution records
                 result = await db.execute(
                     delete(TaskExecution).where(
                         and_(
                             TaskExecution.created_at < cutoff,
-                            TaskExecution.status.in_([
-                                TaskStatus.COMPLETED,
-                                TaskStatus.FAILED,
-                                TaskStatus.CANCELLED,
-                                TaskStatus.TIMEOUT,
-                            ]),
+                            TaskExecution.status.in_(
+                                [
+                                    TaskStatus.COMPLETED,
+                                    TaskStatus.FAILED,
+                                    TaskStatus.CANCELLED,
+                                    TaskStatus.TIMEOUT,
+                                ]
+                            ),
                         )
                     )
                 )
                 await db.commit()
-                deleted = result.rowcount
+                deleted = get_rowcount(result)
                 if deleted:
-                    logger.info(f"Housekeeping: deleted {deleted} execution records older than {retention_days} days")
+                    logger.info(
+                        f"Housekeeping: deleted {deleted} execution records older than {retention_days} days"
+                    )
         except Exception as e:
             logger.error(f"Housekeeping cleanup failed: {e}")
 

@@ -8,20 +8,19 @@ Tests for:
 - Permission checks
 """
 
-import pytest
 from datetime import UTC, datetime, timedelta
+
+import pytest
 from httpx import AsyncClient
 
 from app.core.security import (
-    hash_password,
-    verify_password,
     create_access_token,
     create_refresh_token,
     decode_token,
+    hash_password,
+    verify_password,
     verify_token,
 )
-from app.models.user import User, UserRole
-from app.api.dependencies import get_current_user, get_current_admin_user
 
 
 class TestPasswordSecurity:
@@ -116,11 +115,14 @@ class TestJWTTokens:
         """Test verifying an expired token."""
         # Create token that's already expired
         import jwt
+
         from app.core.config import settings
 
         expired_data = {
             "sub": "user_123",
-            "exp": (datetime.now(UTC) - timedelta(hours=1)).timestamp()  # Expired - timestamp as float
+            "exp": (
+                datetime.now(UTC) - timedelta(hours=1)
+            ).timestamp(),  # Expired - timestamp as float
         }
         token = jwt.encode(expired_data, settings.secret_key, algorithm=settings.algorithm)
 
@@ -172,7 +174,9 @@ class TestPermissions:
     """Test permission checks."""
 
     @pytest.mark.asyncio
-    async def test_admin_endpoint_requires_admin(self, test_client: AsyncClient, test_user_token: str):
+    async def test_admin_endpoint_requires_admin(
+        self, test_client: AsyncClient, test_user_token: str
+    ):
         """Test that admin endpoints reject regular users."""
         headers = {"Authorization": f"Bearer {test_user_token}"}
         response = await test_client.get("/api/users/", headers=headers)
@@ -181,7 +185,9 @@ class TestPermissions:
         assert response.status_code in [401, 403]
 
     @pytest.mark.asyncio
-    async def test_admin_endpoint_allows_admin(self, test_client: AsyncClient, test_admin_token: str):
+    async def test_admin_endpoint_allows_admin(
+        self, test_client: AsyncClient, test_admin_token: str
+    ):
         """Test that admin endpoints allow admins."""
         headers = {"Authorization": f"Bearer {test_admin_token}"}
         response = await test_client.get("/api/users/", headers=headers)
@@ -226,7 +232,7 @@ class TestCSRFProtection:
         response = await test_client.post(
             "/api/tasks/",
             headers=headers,
-            json={"name": "Test Task", "script_id": "stock_zh_a_hist"}
+            json={"name": "Test Task", "script_id": "stock_zh_a_hist"},
         )
 
         # Should not be rejected for content type reasons
@@ -243,8 +249,7 @@ class TestInputValidation:
         malicious_input = "'; DROP TABLE users; --"
 
         response = await test_client.get(
-            f"/api/scripts/scripts?search={malicious_input}",
-            headers=headers
+            f"/api/scripts/scripts?search={malicious_input}", headers=headers
         )
 
         # Should not cause server error
@@ -257,8 +262,7 @@ class TestInputValidation:
         xss_input = "<script>alert('xss')</script>"
 
         response = await test_client.get(
-            f"/api/scripts/scripts?search={xss_input}",
-            headers=headers
+            f"/api/scripts/scripts?search={xss_input}", headers=headers
         )
 
         # Should not cause server error
@@ -271,10 +275,7 @@ class TestInputValidation:
         # Use URL-encoded path traversal to avoid httpx normalizing the URL
         path_input = "..%2F..%2F..%2Fetc%2Fpasswd"
 
-        response = await test_client.get(
-            f"/api/scripts/{path_input}",
-            headers=headers
-        )
+        response = await test_client.get(f"/api/scripts/{path_input}", headers=headers)
 
         # Should not expose sensitive files - any non-500 response is acceptable
         # (endpoint treats path as string ID, not filesystem path)

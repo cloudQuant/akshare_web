@@ -1,0 +1,58 @@
+# Pre-commit hooks for code quality
+# Install: pip install pre-commit && pre-commit install
+# Run manually: pre-commit run --all-files
+
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.0
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.7.10
+    hooks:
+      - id: bandit
+        args: ["-c", "bandit.yaml", "-r", "app/"]
+        additional_dependencies: ["bandit[toml]"]
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-added-large-files
+        args: ["--maxkb=1000"]
+      - id: debug-statements
+
+  - repo: local
+    hooks:
+      - id: pip-audit
+        name: pip-audit (dependency security)
+        entry: bash -c 'command -v pip-audit >/dev/null 2>&1 && pip-audit -r requirements.txt || echo "pip-audit not installed (pip install pip-audit)"'
+        language: system
+        files: ^(requirements\.txt|pyproject\.toml)$
+
+      - id: mypy
+        name: mypy (Python type check)
+        entry: mypy app/
+        language: system
+        files: ^app/.*\.py$
+
+  # Frontend: ESLint + Prettier
+  - repo: local
+    hooks:
+      - id: eslint
+        name: ESLint (frontend)
+        entry: bash -c 'cd frontend && npm run lint'
+        language: system
+        files: ^frontend/.*\.(vue|ts|js|mjs|cjs|tsx|jsx)$
+
+      - id: prettier
+        name: Prettier (frontend)
+        entry: bash -c 'npx -C frontend prettier --write "$@"' bash
+        language: system
+        files: ^frontend/src/.*\.(vue|ts|js|json|css|scss)$

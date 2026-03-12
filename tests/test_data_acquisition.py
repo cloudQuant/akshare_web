@@ -4,7 +4,6 @@ Data acquisition service tests.
 Tests for the data acquisition service module.
 """
 
-import pytest
 from unittest.mock import AsyncMock
 
 
@@ -95,8 +94,13 @@ class TestTaskModel:
 
         # Check model has expected attributes
         expected_attrs = [
-            'id', 'name', 'script_id', 'schedule_type',
-            'schedule_expression', 'is_active', 'created_at'
+            "id",
+            "name",
+            "script_id",
+            "schedule_type",
+            "schedule_expression",
+            "is_active",
+            "created_at",
         ]
 
         for attr in expected_attrs:
@@ -107,7 +111,7 @@ class TestTaskModel:
         from app.models.task import TaskStatus
 
         assert TaskStatus is not None
-        assert hasattr(TaskStatus, '__members__')
+        assert hasattr(TaskStatus, "__members__")
         assert len(TaskStatus.__members__) > 0
 
 
@@ -145,8 +149,12 @@ class TestTaskExecutionModel:
         from app.models.task import TaskExecution
 
         expected_fields = [
-            'execution_id', 'task_id', 'status',
-            'start_time', 'end_time', 'created_at'
+            "execution_id",
+            "task_id",
+            "status",
+            "start_time",
+            "end_time",
+            "created_at",
         ]
 
         for field in expected_fields:
@@ -167,8 +175,12 @@ class TestDataScriptModel:
         from app.models.data_script import DataScript
 
         expected_fields = [
-            'script_id', 'script_name', 'category',
-            'frequency', 'is_active', 'created_at'
+            "script_id",
+            "script_name",
+            "category",
+            "frequency",
+            "is_active",
+            "created_at",
         ]
 
         for field in expected_fields:
@@ -188,10 +200,7 @@ class TestDataTableModel:
         """Test DataTable has expected fields."""
         from app.models.data_table import DataTable
 
-        expected_fields = [
-            'id', 'table_name', 'table_comment',
-            'row_count', 'created_at'
-        ]
+        expected_fields = ["id", "table_name", "table_comment", "row_count", "created_at"]
 
         for field in expected_fields:
             assert hasattr(DataTable, field)
@@ -210,10 +219,7 @@ class TestInterfaceModel:
         """Test DataInterface has expected fields."""
         from app.models.interface import DataInterface
 
-        expected_fields = [
-            'id', 'name', 'display_name',
-            'category', 'is_active', 'created_at'
-        ]
+        expected_fields = ["id", "name", "display_name", "category", "is_active", "created_at"]
 
         for field in expected_fields:
             assert hasattr(DataInterface, field)

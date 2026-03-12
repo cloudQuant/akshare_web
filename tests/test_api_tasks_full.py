@@ -4,9 +4,10 @@ Comprehensive tests for tasks API endpoints.
 Covers list, create, get, update, delete, trigger, schedule templates.
 """
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
 from httpx import AsyncClient
-from unittest.mock import patch, AsyncMock
 
 
 class TestScheduleTemplates:
@@ -61,19 +62,27 @@ class TestCreateTask:
     """Test create task endpoint."""
 
     @pytest.mark.asyncio
-    async def test_create_task_script_not_found(self, test_client: AsyncClient, test_user_token: str):
+    async def test_create_task_script_not_found(
+        self, test_client: AsyncClient, test_user_token: str
+    ):
         """Test creating task with non-existent script."""
         headers = {"Authorization": f"Bearer {test_user_token}"}
-        response = await test_client.post("/api/tasks/", headers=headers, json={
-            "name": "Test Task",
-            "script_id": "nonexistent_script",
-            "schedule_type": "cron",
-            "schedule_expression": "0 8 * * *",
-        })
+        response = await test_client.post(
+            "/api/tasks/",
+            headers=headers,
+            json={
+                "name": "Test Task",
+                "script_id": "nonexistent_script",
+                "schedule_type": "cron",
+                "schedule_expression": "0 8 * * *",
+            },
+        )
         assert response.status_code == 400
 
     @pytest.mark.asyncio
-    async def test_create_task_with_script(self, test_client: AsyncClient, test_user_token: str, test_db):
+    async def test_create_task_with_script(
+        self, test_client: AsyncClient, test_user_token: str, test_db
+    ):
         """Test creating task with valid script."""
         from app.models.data_script import DataScript, ScriptFrequency
 
@@ -89,18 +98,24 @@ class TestCreateTask:
 
         headers = {"Authorization": f"Bearer {test_user_token}"}
         with patch("app.services.scheduler.task_scheduler.add_task", new_callable=AsyncMock):
-            response = await test_client.post("/api/tasks/", headers=headers, json={
-                "name": "Test Task",
-                "script_id": "test_script_for_task",
-                "schedule_type": "cron",
-                "schedule_expression": "0 8 * * *",
-            })
+            response = await test_client.post(
+                "/api/tasks/",
+                headers=headers,
+                json={
+                    "name": "Test Task",
+                    "script_id": "test_script_for_task",
+                    "schedule_type": "cron",
+                    "schedule_expression": "0 8 * * *",
+                },
+            )
         assert response.status_code == 201
         data = response.json()
         assert data["success"] is True
 
     @pytest.mark.asyncio
-    async def test_create_task_invalid_schedule_type(self, test_client: AsyncClient, test_user_token: str, test_db):
+    async def test_create_task_invalid_schedule_type(
+        self, test_client: AsyncClient, test_user_token: str, test_db
+    ):
         """Test creating task with invalid schedule type."""
         from app.models.data_script import DataScript, ScriptFrequency
 
@@ -115,16 +130,22 @@ class TestCreateTask:
         await test_db.commit()
 
         headers = {"Authorization": f"Bearer {test_user_token}"}
-        response = await test_client.post("/api/tasks/", headers=headers, json={
-            "name": "Test Task",
-            "script_id": "test_invalid_sched",
-            "schedule_type": "invalid_type",
-            "schedule_expression": "0 8 * * *",
-        })
+        response = await test_client.post(
+            "/api/tasks/",
+            headers=headers,
+            json={
+                "name": "Test Task",
+                "script_id": "test_invalid_sched",
+                "schedule_type": "invalid_type",
+                "schedule_expression": "0 8 * * *",
+            },
+        )
         assert response.status_code in (400, 422)
 
     @pytest.mark.asyncio
-    async def test_create_task_inactive_script(self, test_client: AsyncClient, test_user_token: str, test_db):
+    async def test_create_task_inactive_script(
+        self, test_client: AsyncClient, test_user_token: str, test_db
+    ):
         """Test creating task with inactive script."""
         from app.models.data_script import DataScript, ScriptFrequency
 
@@ -139,12 +160,16 @@ class TestCreateTask:
         await test_db.commit()
 
         headers = {"Authorization": f"Bearer {test_user_token}"}
-        response = await test_client.post("/api/tasks/", headers=headers, json={
-            "name": "Test Task",
-            "script_id": "inactive_script_task",
-            "schedule_type": "cron",
-            "schedule_expression": "0 8 * * *",
-        })
+        response = await test_client.post(
+            "/api/tasks/",
+            headers=headers,
+            json={
+                "name": "Test Task",
+                "script_id": "inactive_script_task",
+                "schedule_type": "cron",
+                "schedule_expression": "0 8 * * *",
+            },
+        )
         assert response.status_code == 400
 
 
@@ -159,7 +184,9 @@ class TestGetTask:
         assert response.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_get_task_access_denied(self, test_client: AsyncClient, test_user_token: str, test_db):
+    async def test_get_task_access_denied(
+        self, test_client: AsyncClient, test_user_token: str, test_db
+    ):
         """Test getting another user's task."""
         from app.models.task import ScheduledTask, ScheduleType
 
@@ -187,9 +214,13 @@ class TestUpdateTask:
     async def test_update_nonexistent_task(self, test_client: AsyncClient, test_user_token: str):
         """Test updating non-existent task."""
         headers = {"Authorization": f"Bearer {test_user_token}"}
-        response = await test_client.put("/api/tasks/99999", headers=headers, json={
-            "name": "Updated",
-        })
+        response = await test_client.put(
+            "/api/tasks/99999",
+            headers=headers,
+            json={
+                "name": "Updated",
+            },
+        )
         assert response.status_code == 404
 
 

@@ -5,6 +5,8 @@ Uses pydantic-settings for environment-based configuration with validation.
 Integrates with cloud_quant database configuration.
 """
 
+import json
+import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
@@ -12,6 +14,8 @@ from urllib.parse import quote_plus
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from app.utils.constants import DEFAULT_SECRET_KEY
 
 
 class Settings(BaseSettings):
@@ -32,8 +36,10 @@ class Settings(BaseSettings):
     app_debug: bool = Field(default=False, description="Debug mode")
     app_version: str = Field(default="0.1.0", description="Application version")
 
-    # Server Settings
-    host: str = Field(default="0.0.0.0", description="Server host")
+    # Server Settings (0.0.0.0 intentional for Docker/cloud - listen on all interfaces)
+    host: str = Field(
+        default="0.0.0.0", description="Server host"
+    )  # B104 skipped in bandit.yaml (Docker)
     port: int = Field(default=8000, description="Server port")
     workers: int = Field(default=1, description="Number of worker processes")
 
@@ -56,14 +62,27 @@ class Settings(BaseSettings):
     )
 
     # Database Connection Pool
-    database_pool_size: int = Field(default=5, description="Database connection pool size")
-    database_max_overflow: int = Field(default=10, description="Database pool max overflow")
+    database_pool_size: int = Field(
+        default=5,
+        ge=1,
+        le=100,
+        description="Database connection pool size",
+    )
+    database_max_overflow: int = Field(
+        default=10,
+        ge=0,
+        le=100,
+        description="Database pool max overflow",
+    )
 
     # Redis Settings (optional)
     redis_url: str | None = Field(default=None, description="Redis connection URL")
 
     # Authentication Settings
-    secret_key: str = Field(default="change-this-secret-key", description="JWT secret key")
+    secret_key: str = Field(
+        default=DEFAULT_SECRET_KEY,
+        description="JWT secret key",
+    )
     access_token_expire_minutes: int = Field(
         default=1440, description="Access token expiration in minutes (24 hours)"
     )
@@ -91,19 +110,19 @@ class Settings(BaseSettings):
     task_retry_max_attempts: int = Field(
         default=3, description="Maximum number of task retry attempts"
     )
-    task_retry_base_delay: int = Field(
-        default=60, description="Base delay for retry in seconds"
-    )
+    task_retry_base_delay: int = Field(default=60, description="Base delay for retry in seconds")
 
     # Rate Limiting
-    rate_limit_per_minute: int = Field(
-        default=100, description="Rate limit per minute per user"
-    )
+    rate_limit_per_minute: int = Field(default=100, description="Rate limit per minute per user")
     rate_limit_burst: int = Field(default=200, description="Rate limit burst size")
 
     # CORS Settings
     cors_origins: list[str] = Field(
-        default=["http://localhost:5173", "http://localhost:3000", "http://localhost:6600"],
+        default_factory=lambda: [
+            "http://localhost:5173",
+            "http://localhost:3000",
+            "http://localhost:6600",
+        ],
         description="Allowed CORS origins",
     )
     cors_allow_credentials: bool = Field(default=True, description="Allow CORS credentials")
@@ -143,8 +162,7 @@ class Settings(BaseSettings):
     @classmethod
     def validate_secret_key(cls, v: str, info) -> str:
         """Warn or reject default secret key based on environment."""
-        if v == "change-this-secret-key":
-            import os
+        if v == DEFAULT_SECRET_KEY:
             env = os.getenv("APP_ENV", "development")
             if env == "production":
                 raise ValueError(
@@ -158,13 +176,12 @@ class Settings(BaseSettings):
     def parse_cors_origins(cls, v: str | list[str]) -> list[str]:
         """Parse CORS origins from string or list."""
         if isinstance(v, str):
-            import json
-
             try:
-                return json.loads(v)
+                parsed: list[str] = json.loads(v)
+                return parsed
             except json.JSONDecodeError:
                 return [origin.strip() for origin in v.split(",")]
-        return v
+        return list(v)
 
     @property
     def is_development(self) -> bool:
@@ -195,14 +212,18 @@ class Settings(BaseSettings):
         """Get data warehouse database URL (sync, for akshare scripts)."""
         password = quote_plus(self.data_mysql_password)
         host = f"{self.data_mysql_host}:{self.data_mysql_port}"
-        return f"mysql+pymysql://{self.data_mysql_user}:{password}@{host}/{self.data_mysql_database}"
+        return (
+            f"mysql+pymysql://{self.data_mysql_user}:{password}@{host}/{self.data_mysql_database}"
+        )
 
     @property
     def data_database_url_async(self) -> str:
         """Get data warehouse async database URL."""
         password = quote_plus(self.data_mysql_password)
         host = f"{self.data_mysql_host}:{self.data_mysql_port}"
-        return f"mysql+aiomysql://{self.data_mysql_user}:{password}@{host}/{self.data_mysql_database}"
+        return (
+            f"mysql+aiomysql://{self.data_mysql_user}:{password}@{host}/{self.data_mysql_database}"
+        )
 
 
 @lru_cache

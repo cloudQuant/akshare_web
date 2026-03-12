@@ -4,8 +4,6 @@ Configuration module tests.
 Tests for application settings and configuration.
 """
 
-import pytest
-
 
 class TestSettings:
     """Test application settings."""

@@ -32,7 +32,7 @@ def generate_table_name(interface_name: str, prefix: str = "ak_") -> str:
     return f"{prefix}{clean_name}"
 
 
-def clean_column_names(columns: list[str] | Any) -> list[str]:
+def clean_column_names(columns: list[str] | Any) -> list[str]:  # noqa: ANN401
     """
     Clean DataFrame column names for SQL compatibility.
 
@@ -62,24 +62,25 @@ def clean_column_names(columns: list[str] | Any) -> list[str]:
     return cleaned
 
 
-def format_size(bytes: int | None) -> str:
+def format_size(size_bytes: int | None) -> str:
     """
     Format byte size to human-readable format.
 
     Args:
-        bytes: Size in bytes
+        size_bytes: Size in bytes
 
     Returns:
         Formatted size string
     """
-    if bytes is None:
+    if size_bytes is None:
         return "Unknown"
 
+    remaining: float = float(size_bytes)
     for unit in ["B", "KB", "MB", "GB", "TB"]:
-        if bytes < 1024.0:
-            return f"{bytes:.1f} {unit}"
-        bytes /= 1024.0
-    return f"{bytes:.1f} PB"
+        if remaining < 1024.0:
+            return f"{remaining:.1f} {unit}"
+        remaining /= 1024.0
+    return f"{remaining:.1f} PB"
 
 
 def format_duration(milliseconds: int | None) -> str:
@@ -97,12 +98,11 @@ def format_duration(milliseconds: int | None) -> str:
 
     if milliseconds < 1000:
         return f"{milliseconds}ms"
-    elif milliseconds < 60000:
+    if milliseconds < 60000:
         seconds = milliseconds / 1000
         return f"{seconds:.1f}s"
-    else:
-        minutes = milliseconds / 60000
-        return f"{minutes:.1f}m"
+    minutes = milliseconds / 60000
+    return f"{minutes:.1f}m"
 
 
 def safe_column_name(name: str) -> str:
@@ -118,7 +118,7 @@ def safe_column_name(name: str) -> str:
     Raises:
         ValueError: If column name contains invalid characters
     """
-    if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', name):
+    if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", name):
         raise ValueError(f"Invalid column name: {name}")
     return f"`{name}`"
 
@@ -136,7 +136,7 @@ def safe_table_name(name: str) -> str:
     Raises:
         ValueError: If table name contains invalid characters
     """
-    if not re.match(r'^[A-Za-z_][A-Za-z0-9_]*$', name):
+    if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", name):
         raise ValueError(f"Invalid table name: {name}")
     return f"`{name}`"
 

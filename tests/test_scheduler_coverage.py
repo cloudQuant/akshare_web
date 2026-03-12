@@ -3,13 +3,12 @@ Tests for TaskScheduler covering _load_active_tasks, _schedule_task,
 _execute_task_wrapper, _execute_with_retry, add_task, trigger_task, etc.
 """
 
-import pytest
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
-from datetime import datetime, UTC
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
+from app.models.task import ScheduleType
 from app.services.scheduler import TaskScheduler
-from app.models.task import ScheduledTask, TaskExecution, TaskStatus, ScheduleType, TriggeredBy
 
 
 @pytest.fixture
@@ -108,7 +107,7 @@ class TestLoadActiveTasks:
         with patch("app.services.scheduler.async_session_maker") as mock_sm:
             mock_sm.return_value.__aenter__ = AsyncMock(return_value=mock_session)
             mock_sm.return_value.__aexit__ = AsyncMock(return_value=False)
-            with patch.object(scheduler, '_schedule_task', new_callable=AsyncMock):
+            with patch.object(scheduler, "_schedule_task", new_callable=AsyncMock):
                 await scheduler._load_active_tasks()
                 scheduler._schedule_task.assert_called_once()
 
@@ -126,7 +125,12 @@ class TestLoadActiveTasks:
         with patch("app.services.scheduler.async_session_maker") as mock_sm:
             mock_sm.return_value.__aenter__ = AsyncMock(return_value=mock_session)
             mock_sm.return_value.__aexit__ = AsyncMock(return_value=False)
-            with patch.object(scheduler, '_schedule_task', new_callable=AsyncMock, side_effect=RuntimeError("fail")):
+            with patch.object(
+                scheduler,
+                "_schedule_task",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("fail"),
+            ):
                 await scheduler._load_active_tasks()  # should not raise
 
 
@@ -194,7 +198,7 @@ class TestExecuteTaskWrapper:
         with patch("app.services.scheduler.async_session_maker") as mock_sm:
             mock_sm.return_value.__aenter__ = AsyncMock(return_value=mock_session)
             mock_sm.return_value.__aexit__ = AsyncMock(return_value=False)
-            with patch.object(scheduler, '_execute_with_retry', new_callable=AsyncMock):
+            with patch.object(scheduler, "_execute_with_retry", new_callable=AsyncMock):
                 await scheduler._execute_task_wrapper(task_id=1)
                 scheduler._execute_with_retry.assert_called_once()
 
@@ -218,8 +222,10 @@ class TestExecuteWithRetry:
         mock_script = MagicMock()
         mock_script.target_table = None
 
-        with patch("app.services.scheduler.ExecutionService") as MockES, \
-             patch("app.services.scheduler.ScriptService") as MockSS:
+        with (
+            patch("app.services.scheduler.ExecutionService") as MockES,
+            patch("app.services.scheduler.ScriptService") as MockSS,
+        ):
             MockES.return_value.create_execution = AsyncMock(return_value=mock_execution)
             MockES.return_value.update_execution = AsyncMock()
             MockES.return_value.handle_execution_complete = AsyncMock()
@@ -245,8 +251,10 @@ class TestExecuteWithRetry:
         mock_script = MagicMock()
         mock_script.target_table = None
 
-        with patch("app.services.scheduler.ExecutionService") as MockES, \
-             patch("app.services.scheduler.ScriptService") as MockSS:
+        with (
+            patch("app.services.scheduler.ExecutionService") as MockES,
+            patch("app.services.scheduler.ScriptService") as MockSS,
+        ):
             MockES.return_value.create_execution = AsyncMock(return_value=mock_execution)
             MockES.return_value.update_execution = AsyncMock()
             MockES.return_value.handle_execution_complete = AsyncMock()
@@ -272,9 +280,11 @@ class TestExecuteWithRetry:
         mock_script = MagicMock()
         mock_script.target_table = "my_table"
 
-        with patch("app.services.scheduler.ExecutionService") as MockES, \
-             patch("app.services.scheduler.ScriptService") as MockSS, \
-             patch("app.data_fetch.providers.akshare_provider.AkshareProvider") as MockProv:
+        with (
+            patch("app.services.scheduler.ExecutionService") as MockES,
+            patch("app.services.scheduler.ScriptService") as MockSS,
+            patch("app.data_fetch.providers.akshare_provider.AkshareProvider") as MockProv,
+        ):
             MockES.return_value.create_execution = AsyncMock(return_value=mock_execution)
             MockES.return_value.update_execution = AsyncMock()
             MockSS.return_value.get_script = AsyncMock(return_value=mock_script)
@@ -318,8 +328,10 @@ class TestUpdateTask:
         mock_result.scalar_one_or_none.return_value = None
         mock_db.execute.return_value = mock_result
 
-        with patch.object(scheduler, 'remove_task', new_callable=AsyncMock), \
-             patch.object(scheduler, 'add_task', new_callable=AsyncMock):
+        with (
+            patch.object(scheduler, "remove_task", new_callable=AsyncMock),
+            patch.object(scheduler, "add_task", new_callable=AsyncMock),
+        ):
             await scheduler.update_task(1, mock_db)
 
 
@@ -368,8 +380,10 @@ class TestTriggerTask:
         mock_result.scalar_one_or_none.return_value = mock_task
         mock_session.execute.return_value = mock_result
 
-        with patch("app.services.scheduler.async_session_maker") as mock_sm, \
-             patch("asyncio.create_task"):
+        with (
+            patch("app.services.scheduler.async_session_maker") as mock_sm,
+            patch("asyncio.create_task"),
+        ):
             mock_sm.return_value.__aenter__ = AsyncMock(return_value=mock_session)
             mock_sm.return_value.__aexit__ = AsyncMock(return_value=False)
 

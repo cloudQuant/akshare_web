@@ -2,10 +2,9 @@
 Tests for async_retry_on_exception decorator in retry.py (lines 70-99).
 """
 
-import pytest
-import asyncio
-import logging
 from unittest.mock import MagicMock
+
+import pytest
 
 from app.data_fetch.utils.retry import async_retry_on_exception
 
@@ -91,6 +90,7 @@ class TestAsyncRetryOnException:
     @pytest.mark.asyncio
     async def test_default_logger(self):
         """Test fallback to default logger when no logger provided."""
+
         @async_retry_on_exception(max_retries=2, retry_delay=0.01)
         async def no_logger_func():
             raise ValueError("fail")

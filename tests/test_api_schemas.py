@@ -4,8 +4,9 @@ API schemas comprehensive tests.
 Comprehensive tests for Pydantic schemas used in API requests/responses.
 """
 
-import pytest
 from datetime import UTC, datetime, timedelta
+
+import pytest
 from pydantic import ValidationError
 
 

@@ -4,8 +4,6 @@ Models module comprehensive tests.
 Comprehensive tests for all database models.
 """
 
-import pytest
-
 
 class TestUserModel:
     """Test User model."""
@@ -34,8 +32,8 @@ class TestUserModel:
         """Test User has timestamp fields."""
         from app.models.user import User
 
-        assert hasattr(User, 'created_at')
-        assert hasattr(User, 'updated_at')
+        assert hasattr(User, "created_at")
+        assert hasattr(User, "updated_at")
 
 
 class TestDataTableModel:
@@ -51,14 +49,14 @@ class TestDataTableModel:
         """Test DataTable has table_comment field."""
         from app.models.data_table import DataTable
 
-        assert hasattr(DataTable, 'table_comment')
+        assert hasattr(DataTable, "table_comment")
 
     def test_table_has_size_fields(self):
         """Test DataTable has size fields."""
         from app.models.data_table import DataTable
 
-        assert hasattr(DataTable, 'row_count')
-        assert hasattr(DataTable, 'category')
+        assert hasattr(DataTable, "row_count")
+        assert hasattr(DataTable, "category")
 
 
 class TestInterfaceCategoryModel:
@@ -74,7 +72,7 @@ class TestInterfaceCategoryModel:
         """Test InterfaceCategory has sort_order."""
         from app.models.interface import InterfaceCategory
 
-        assert hasattr(InterfaceCategory, 'sort_order')
+        assert hasattr(InterfaceCategory, "sort_order")
 
 
 class TestInterfaceParameterModel:
@@ -90,7 +88,7 @@ class TestInterfaceParameterModel:
         """Test InterfaceParameter has type field."""
         from app.models.interface import InterfaceParameter
 
-        assert hasattr(InterfaceParameter, 'param_type')
+        assert hasattr(InterfaceParameter, "param_type")
 
     def test_parameter_type_enum(self):
         """Test ParameterType enum."""
@@ -113,14 +111,14 @@ class TestScheduledTaskModel:
         """Test ScheduledTask has retry configuration."""
         from app.models.task import ScheduledTask
 
-        assert hasattr(ScheduledTask, 'retry_on_failure')
-        assert hasattr(ScheduledTask, 'max_retries')
+        assert hasattr(ScheduledTask, "retry_on_failure")
+        assert hasattr(ScheduledTask, "max_retries")
 
     def test_task_has_execution_fields(self):
         """Test ScheduledTask has execution tracking."""
         from app.models.task import ScheduledTask
 
-        assert hasattr(ScheduledTask, 'last_execution_at')
+        assert hasattr(ScheduledTask, "last_execution_at")
 
 
 class TestTaskExecutionModel:
@@ -136,19 +134,19 @@ class TestTaskExecutionModel:
         """Test TaskExecution has result field."""
         from app.models.task import TaskExecution
 
-        assert hasattr(TaskExecution, 'result')
+        assert hasattr(TaskExecution, "result")
 
     def test_execution_has_error_info(self):
         """Test TaskExecution has error fields."""
         from app.models.task import TaskExecution
 
-        assert hasattr(TaskExecution, 'error_message')
+        assert hasattr(TaskExecution, "error_message")
 
     def test_execution_has_retry_count(self):
         """Test TaskExecution has retry_count."""
         from app.models.task import TaskExecution
 
-        assert hasattr(TaskExecution, 'retry_count')
+        assert hasattr(TaskExecution, "retry_count")
 
 
 class TestDataScriptModel:
@@ -164,14 +162,14 @@ class TestDataScriptModel:
         """Test DataScript has frequency."""
         from app.models.data_script import DataScript
 
-        assert hasattr(DataScript, 'frequency')
+        assert hasattr(DataScript, "frequency")
 
     def test_script_has_config(self):
         """Test DataScript has configuration."""
         from app.models.data_script import DataScript
 
-        assert hasattr(DataScript, 'estimated_duration')
-        assert hasattr(DataScript, 'timeout')
+        assert hasattr(DataScript, "estimated_duration")
+        assert hasattr(DataScript, "timeout")
 
 
 class TestScriptFrequencyEnum:
@@ -187,9 +185,9 @@ class TestScriptFrequencyEnum:
         """Test ScriptFrequency has expected values."""
         from app.models.data_script import ScriptFrequency
 
-        assert hasattr(ScriptFrequency, 'DAILY')
-        assert hasattr(ScriptFrequency, 'HOURLY')
-        assert hasattr(ScriptFrequency, 'MANUAL')
+        assert hasattr(ScriptFrequency, "DAILY")
+        assert hasattr(ScriptFrequency, "HOURLY")
+        assert hasattr(ScriptFrequency, "MANUAL")
 
 
 class TestModelsInit:
@@ -198,11 +196,17 @@ class TestModelsInit:
     def test_models_module_has_all_models(self):
         """Test models module exports all expected models."""
         from app.models import (
-            User, UserRole,
+            DataInterface,
+            DataScript,
             DataTable,
-            DataInterface, InterfaceCategory, InterfaceParameter,
-            ScheduledTask, TaskExecution, TaskStatus,
-            DataScript, ScriptFrequency
+            InterfaceCategory,
+            InterfaceParameter,
+            ScheduledTask,
+            ScriptFrequency,
+            TaskExecution,
+            TaskStatus,
+            User,
+            UserRole,
         )
 
         assert User is not None
@@ -231,6 +235,6 @@ class TestTaskStatusEnum:
         """Test TaskStatus has expected values."""
         from app.models.task import TaskStatus
 
-        expected = ['PENDING', 'RUNNING', 'COMPLETED', 'FAILED', 'CANCELLED']
+        expected = ["PENDING", "RUNNING", "COMPLETED", "FAILED", "CANCELLED"]
         for status in expected:
             assert hasattr(TaskStatus, status)

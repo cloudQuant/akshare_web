@@ -3,13 +3,15 @@ import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { tablesApi } from '@/api/tables'
+import { getApiErrorMessage } from '@/utils/error'
+import type { TableDataResponse, TableSchema } from '@/types'
 
 const route = useRoute()
 const router = useRouter()
 
 const tableId = ref(route.params.id as string)
-const schema = ref<any>(null)
-const previewData = ref<any>(null)
+const schema = ref<TableSchema | null>(null)
+const previewData = ref<TableDataResponse | null>(null)
 const loading = ref(false)
 const activeTab = ref('schema')
 
@@ -18,8 +20,7 @@ async function loadSchema() {
   try {
     schema.value = await tablesApi.getSchema(tableId.value)
   } catch (error) {
-    console.error('Failed to load schema:', error)
-    ElMessage.error('加载表结构失败')
+    ElMessage.error(getApiErrorMessage(error) || '加载表结构失败')
   } finally {
     loading.value = false
   }
@@ -30,8 +31,7 @@ async function loadPreview() {
   try {
     previewData.value = await tablesApi.getData(tableId.value, 1, 100)
   } catch (error) {
-    console.error('Failed to load preview:', error)
-    ElMessage.error('加载预览数据失败')
+    ElMessage.error(getApiErrorMessage(error) || '加载预览数据失败')
   } finally {
     loading.value = false
   }
@@ -55,14 +55,23 @@ onMounted(() => {
 
 <template>
   <div class="table-detail-view">
-    <el-page-header @back="goBack" title="返回">
+    <el-page-header
+      title="返回"
+      @back="goBack"
+    >
       <template #content>
         <span>{{ schema?.table_name || '' }}</span>
       </template>
     </el-page-header>
 
-    <div v-loading="loading" class="content">
-      <el-card v-if="schema" class="detail-card">
+    <div
+      v-loading="loading"
+      class="content"
+    >
+      <el-card
+        v-if="schema"
+        class="detail-card"
+      >
         <!-- Stats -->
         <div class="stats-row">
           <div class="stat-item">
@@ -82,24 +91,57 @@ onMounted(() => {
         </div>
 
         <!-- Tabs -->
-        <el-tabs v-model="activeTab" @tab-change="handleTabChange">
-          <el-tab-pane label="表结构" name="schema">
-            <el-table :data="schema.columns" style="width: 100%">
-              <el-table-column prop="name" label="列名" />
-              <el-table-column prop="type" label="数据类型" width="200" />
-              <el-table-column label="可空" width="80">
+        <el-tabs
+          v-model="activeTab"
+          @tab-change="handleTabChange"
+        >
+          <el-tab-pane
+            label="表结构"
+            name="schema"
+          >
+            <el-table
+              :data="schema.columns"
+              style="width: 100%"
+            >
+              <el-table-column
+                prop="name"
+                label="列名"
+              />
+              <el-table-column
+                prop="type"
+                label="数据类型"
+                width="200"
+              />
+              <el-table-column
+                label="可空"
+                width="80"
+              >
                 <template #default="{ row }">
-                  <el-tag :type="row.nullable ? 'success' : 'danger'" size="small">
+                  <el-tag
+                    :type="row.nullable ? 'success' : 'danger'"
+                    size="small"
+                  >
                     {{ row.nullable ? '是' : '否' }}
                   </el-tag>
                 </template>
               </el-table-column>
-              <el-table-column prop="key" label="键" width="80" />
-              <el-table-column prop="default" label="默认值" width="120" />
+              <el-table-column
+                prop="key"
+                label="键"
+                width="80"
+              />
+              <el-table-column
+                prop="default"
+                label="默认值"
+                width="120"
+              />
             </el-table>
           </el-tab-pane>
 
-          <el-tab-pane label="预览数据" name="preview">
+          <el-tab-pane
+            label="预览数据"
+            name="preview"
+          >
             <el-table
               :data="previewData?.rows || []"
               style="width: 100%"
@@ -115,7 +157,10 @@ onMounted(() => {
                 show-overflow-tooltip
               />
             </el-table>
-            <div v-if="!previewData?.rows?.length" class="empty-hint">
+            <div
+              v-if="!previewData?.rows?.length"
+              class="empty-hint"
+            >
               <el-empty description="暂无数据" />
             </div>
           </el-tab-pane>

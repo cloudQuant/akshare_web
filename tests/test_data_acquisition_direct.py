@@ -2,10 +2,11 @@
 Direct tests for DataAcquisitionService to maximize coverage.
 """
 
-import pytest
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
+
 import pandas as pd
+import pytest
 
 from app.services.data_acquisition import DataAcquisitionService
 
@@ -116,7 +117,9 @@ class TestCallAkshareFunction:
         df = pd.DataFrame({"x": [1]})
         with patch("app.services.data_acquisition.ak") as mock_ak:
             mock_ak.test_func = MagicMock(return_value=df)
-            result = await svc._call_akshare_function(iface, {"symbol": "000001", "empty_param": None})
+            result = await svc._call_akshare_function(
+                iface, {"symbol": "000001", "empty_param": None}
+            )
         assert isinstance(result, pd.DataFrame)
         mock_ak.test_func.assert_called_once_with(symbol="000001")
 

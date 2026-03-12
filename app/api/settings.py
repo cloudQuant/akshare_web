@@ -4,30 +4,28 @@ Database settings API endpoints.
 Provides endpoints for managing database connection configurations.
 """
 
-from typing import Any
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from loguru import logger
-from pydantic import BaseModel, Field, validator
-from sqlalchemy.ext.asyncio import AsyncSession
+from pydantic import BaseModel, Field
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db
-from app.core.config import settings
 from app.api.dependencies import get_current_admin_user
+from app.core.config import settings
+from app.core.database import get_db
 from app.models.user import User
 
 router = APIRouter()
 
 
-def _update_env_file(env_path, updates: dict[str, str]) -> None:
+def _update_env_file(env_path: Path | str, updates: dict[str, str]) -> None:
     """Update or create entries in a .env file.
 
     Reads the existing file, replaces matching KEY=value lines,
     appends new keys, and writes back atomically.
     """
-    from pathlib import Path
-
     path = Path(env_path)
     lines: list[str] = []
     updated_keys: set[str] = set()
@@ -92,7 +90,9 @@ class TestConnectionResponse(BaseModel):
     message: str
 
 
-@router.get("/database", )
+@router.get(
+    "/database",
+)
 async def get_database_config(
     current_admin: User = Depends(get_current_admin_user),
 ) -> DatabaseConfigResponse:
@@ -110,7 +110,9 @@ async def get_database_config(
     )
 
 
-@router.get("/database/warehouse", )
+@router.get(
+    "/database/warehouse",
+)
 async def get_warehouse_config(
     current_admin: User = Depends(get_current_admin_user),
 ) -> DatabaseConfigResponse:
@@ -128,27 +130,11 @@ async def get_warehouse_config(
     )
 
 
-@router.post("/database/test", )
-async def test_database_connection(
-    request: TestConnectionRequest,
-    current_admin: User = Depends(get_current_admin_user),
-    db: AsyncSession = Depends(get_db),
-) -> TestConnectionResponse:
-    """
-    Test database connection with provided credentials.
-
-    Requires admin privileges.
-    """
+async def _test_connection_impl(request: TestConnectionRequest) -> TestConnectionResponse:
+    """Shared implementation for database connection tests."""
     try:
-        # Create a connection URL with the provided credentials
         import aiomysql
 
-        connection_url = (
-            f"mysql://{request.user}:{request.password}@"
-            f"{request.host}:{request.port}/{request.database}"
-        )
-
-        # Try to establish a connection
         conn = await aiomysql.connect(
             host=request.host,
             port=request.port,
@@ -157,24 +143,22 @@ async def test_database_connection(
             db=request.database,
             connect_timeout=5,
         )
+        try:
+            async with conn.cursor() as cursor:
+                await cursor.execute("SELECT 1")
+                result = await cursor.fetchone()
 
-        # Execute a simple test query
-        async with conn.cursor() as cursor:
-            await cursor.execute("SELECT 1")
-            result = await cursor.fetchone()
-
-        await conn.close()
-
-        if result and result[0] == 1:
-            return TestConnectionResponse(
-                success=True,
-                message="数据库连接成功",
-            )
-        else:
+            if result and result[0] == 1:
+                return TestConnectionResponse(
+                    success=True,
+                    message="数据库连接成功",
+                )
             return TestConnectionResponse(
                 success=False,
                 message="数据库连接异常",
             )
+        finally:
+            conn.close()
 
     except ImportError:
         # aiomysql not available, try with SQLAlchemy
@@ -201,17 +185,47 @@ async def test_database_connection(
         except Exception as e:
             return TestConnectionResponse(
                 success=False,
-                message=f"数据库连接失败: {str(e)}",
+                message=f"数据库连接失败: {e!s}",
             )
 
     except Exception as e:
         return TestConnectionResponse(
             success=False,
-            message=f"数据库连接失败: {str(e)}",
+            message=f"数据库连接失败: {e!s}",
         )
 
 
-@router.put("/database", )
+@router.post("/database/test")
+async def test_database_connection(
+    request: TestConnectionRequest,
+    current_admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db),
+) -> TestConnectionResponse:
+    """
+    Test database connection with provided credentials.
+
+    Requires admin privileges.
+    """
+    _ = db  # Unused; kept for API consistency
+    return await _test_connection_impl(request)
+
+
+@router.post("/database/warehouse/test")
+async def test_warehouse_connection(
+    request: TestConnectionRequest,
+    current_admin: User = Depends(get_current_admin_user),
+) -> TestConnectionResponse:
+    """
+    Test data warehouse database connection with provided credentials.
+
+    Requires admin privileges.
+    """
+    return await _test_connection_impl(request)
+
+
+@router.put(
+    "/database",
+)
 async def update_database_config(
     request: DatabaseConfigRequest,
     current_admin: User = Depends(get_current_admin_user),
@@ -250,8 +264,6 @@ async def update_database_config(
     )
 
     # Persist to .env file
-    from pathlib import Path
-
     env_path = Path(__file__).resolve().parent.parent.parent / ".env"
     _update_env_file(env_path, env_updates)
 
@@ -262,17 +274,3 @@ async def update_database_config(
         user=request.user,
         is_warehouse=request.is_warehouse,
     )
-
-
-@router.post("/database/warehouse/test", )
-async def test_warehouse_connection(
-    request: TestConnectionRequest,
-    current_admin: User = Depends(get_current_admin_user),
-) -> TestConnectionResponse:
-    """
-    Test data warehouse database connection with provided credentials.
-
-    Requires admin privileges.
-    """
-    # Same implementation as test_database_connection
-    return await test_database_connection(request, current_admin, None)

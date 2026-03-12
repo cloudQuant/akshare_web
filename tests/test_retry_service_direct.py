@@ -2,12 +2,12 @@
 Direct tests for RetryService to maximize coverage.
 """
 
-import asyncio
-import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
-from app.services.retry_service import RetryService
+import pytest
+
 from app.models.task import TaskStatus
+from app.services.retry_service import RetryService
 
 
 def _mock_execution(eid="e1", retry_count=0, status=TaskStatus.FAILED):
@@ -48,13 +48,19 @@ class TestShouldRetry:
     async def test_no_retry_max_reached(self):
         db = AsyncMock()
         svc = RetryService(db)
-        assert await svc.should_retry(_mock_execution(retry_count=3), _mock_task(max_retries=3)) is False
+        assert (
+            await svc.should_retry(_mock_execution(retry_count=3), _mock_task(max_retries=3))
+            is False
+        )
 
     @pytest.mark.asyncio
     async def test_no_retry_not_failed(self):
         db = AsyncMock()
         svc = RetryService(db)
-        assert await svc.should_retry(_mock_execution(status=TaskStatus.COMPLETED), _mock_task()) is False
+        assert (
+            await svc.should_retry(_mock_execution(status=TaskStatus.COMPLETED), _mock_task())
+            is False
+        )
 
 
 class TestCalculateRetryDelay:

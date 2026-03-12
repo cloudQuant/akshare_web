@@ -7,6 +7,7 @@ Notes:
 
 from collections.abc import Callable
 from datetime import datetime
+from typing import Any
 
 from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_EXECUTED
 from apscheduler.executors.asyncio import AsyncIOExecutor
@@ -14,14 +15,13 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.interval import IntervalTrigger
-
 from loguru import logger
 
 
 class SchedulerService:
     """定时任务调度服务"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """初始化调度器"""
         self.scheduler: AsyncIOScheduler | None = None
 
@@ -31,7 +31,7 @@ class SchedulerService:
             self._initialize_scheduler()
         return self.scheduler
 
-    def _initialize_scheduler(self):
+    def _initialize_scheduler(self) -> None:
         """初始化APScheduler"""
         executors = {"default": AsyncIOExecutor()}
         job_defaults = {
@@ -44,7 +44,7 @@ class SchedulerService:
             executors=executors, job_defaults=job_defaults, timezone="Asia/Shanghai"
         )
 
-    async def start(self):
+    async def start(self) -> None:
         """启动调度器"""
         scheduler = self.get_scheduler()
         if not scheduler.running:
@@ -53,7 +53,9 @@ class SchedulerService:
                 self._job_executed_listener, EVENT_JOB_EXECUTED | EVENT_JOB_ERROR
             )
             scheduler.start()
-            logger.info("Scheduler started (in-memory job store – jobs re-loaded from DB on each startup)")
+            logger.info(
+                "Scheduler started (in-memory job store – jobs re-loaded from DB on each startup)"
+            )
             logger.warning(
                 "APScheduler is using an in-memory job store. "
                 "If the process restarts, all jobs are re-registered from the database. "
@@ -61,7 +63,7 @@ class SchedulerService:
                 "APScheduler 4.x with a SQLAlchemy/Redis data store, or arq/celery."
             )
 
-    async def shutdown(self, wait=True):
+    async def shutdown(self, wait: bool = True) -> None:
         """关闭调度器"""
         scheduler = self.get_scheduler()
         if scheduler and scheduler.running:
@@ -75,7 +77,7 @@ class SchedulerService:
         trigger_type: str,
         trigger_args: dict,
         job_name: str | None = None,
-        **kwargs,
+        **kwargs: Any,  # noqa: ANN401
     ) -> dict | None:
         """
         添加定时任务
@@ -158,14 +160,14 @@ class SchedulerService:
         jobs = scheduler.get_jobs(jobstore)
         return [self._job_to_dict(job) for job in jobs]
 
-    def get_job(self, job_id: str):
+    def get_job(self, job_id: str) -> Any:
         """获取单个任务"""
         scheduler = self.get_scheduler()
         if scheduler:
             return scheduler.get_job(job_id)
         return None
 
-    def _build_trigger(self, trigger_type: str, trigger_args: dict):
+    def _build_trigger(self, trigger_type: str, trigger_args: dict[str, Any]) -> Any:  # noqa: ANN401
         """构建触发器"""
         if trigger_type == "cron":
             cron_expression = trigger_args.get("cron_expression") or trigger_args.get("cron")
@@ -173,7 +175,7 @@ class SchedulerService:
                 raise ValueError("Missing cron expression in trigger_args (cron_expression/cron)")
             timezone_str = trigger_args.get("timezone", "Asia/Shanghai")
             return CronTrigger.from_crontab(cron_expression, timezone=timezone_str)
-        elif trigger_type == "interval":
+        if trigger_type == "interval":
             return IntervalTrigger(
                 **{
                     k: v
@@ -181,15 +183,14 @@ class SchedulerService:
                     if v is not None and k in ["weeks", "days", "hours", "minutes", "seconds"]
                 }
             )
-        elif trigger_type == "date":
+        if trigger_type == "date":
             run_date = trigger_args.get("run_date")
             if isinstance(run_date, str):
                 run_date = datetime.fromisoformat(run_date)
             return DateTrigger(run_date=run_date)
-        elif trigger_type == "once":
+        if trigger_type == "once":
             return DateTrigger(run_date=datetime.now())
-        else:
-            raise ValueError(f"Unknown trigger type: {trigger_type}")
+        raise ValueError(f"Unknown trigger type: {trigger_type}")
 
     def _job_to_dict(self, job) -> dict:
         """任务对象转字典"""
@@ -201,7 +202,7 @@ class SchedulerService:
             "executor": job.executor,
         }
 
-    def _job_executed_listener(self, event):
+    def _job_executed_listener(self, event: Any) -> None:  # noqa: ANN401
         """任务执行监听器"""
         if event.exception:
             logger.error(f"Job {event.job_id} failed: {event.exception}")

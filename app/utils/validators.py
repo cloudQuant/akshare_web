@@ -22,6 +22,46 @@ def validate_email(email: str) -> bool:
     return re.match(pattern, email) is not None
 
 
+def _validate_daily(expression: str) -> bool:
+    """Validate daily format: HH:MM (e.g. 09:30)."""
+    pattern = r"^([01]\d|2[0-3]):([0-5]\d)$"
+    return re.match(pattern, expression) is not None
+
+
+def _validate_weekly(expression: str) -> bool:
+    """Validate weekly format: MON HH:MM or 0-6 HH:MM."""
+    days = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
+    parts = expression.split()
+    if len(parts) != 2:
+        return False
+    day_valid = parts[0] in days or (parts[0].isdigit() and 0 <= int(parts[0]) <= 6)
+    time_valid = re.match(r"^([01]\d|2[0-3]):([0-5]\d)$", parts[1]) is not None
+    return day_valid and time_valid
+
+
+def _validate_monthly(expression: str) -> bool:
+    """Validate monthly format: DD HH:MM (e.g. 15 09:30)."""
+    pattern = r"^(0?[1-9]|[12]\d|3[01]) ([01]\d|2[0-3]):([0-5]\d)$"
+    return re.match(pattern, expression) is not None
+
+
+def _validate_cron(expression: str) -> bool:
+    """Validate standard 5-part cron expression."""
+    parts = expression.split()
+    if len(parts) != 5:
+        return False
+    try:
+        for part in parts:
+            if "*" in part or "," in part or "-" in part or "/" in part:
+                continue
+            if part.isdigit():
+                continue
+            return False
+        return True
+    except ValueError:
+        return False
+
+
 def validate_schedule_expression(expression: str, schedule_type: str = "cron") -> bool:
     """
     Validate schedule expression based on type.
@@ -36,45 +76,14 @@ def validate_schedule_expression(expression: str, schedule_type: str = "cron") -
     if not expression:
         return False
 
-    if schedule_type == "daily":
-        # Format: "HH:MM"
-        pattern = r"^([01]\d|2[0-3]):([0-5]\d)$"
-        return re.match(pattern, expression) is not None
-
-    elif schedule_type == "weekly":
-        # Format: "MON HH:MM" or "0-6 HH:MM"
-        days = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
-        parts = expression.split()
-        if len(parts) != 2:
-            return False
-        day_valid = parts[0] in days or (parts[0].isdigit() and 0 <= int(parts[0]) <= 6)
-        time_valid = re.match(r"^([01]\d|2[0-3]):([0-5]\d)$", parts[1]) is not None
-        return day_valid and time_valid
-
-    elif schedule_type == "monthly":
-        # Format: "DD HH:MM"
-        pattern = r"^(0?[1-9]|[12]\d|3[01]) ([01]\d|2[0-3]):([0-5]\d)$"
-        return re.match(pattern, expression) is not None
-
-    elif schedule_type == "cron":
-        # Standard 5-part cron expression
-        parts = expression.split()
-        if len(parts) != 5:
-            return False
-        # Basic validation - each part should be valid
-        # minute, hour, day, month, day_of_week
-        try:
-            for part in parts:
-                if "*" in part or "," in part or "-" in part or "/" in part:
-                    continue
-                if part.isdigit():
-                    continue
-                return False
-            return True
-        except ValueError:
-            return False
-
-    return False
+    validators = {
+        "daily": _validate_daily,
+        "weekly": _validate_weekly,
+        "monthly": _validate_monthly,
+        "cron": _validate_cron,
+    }
+    validator = validators.get(schedule_type)
+    return validator(expression) if validator else False
 
 
 def validate_username(username: str) -> tuple[bool, str | None]:
@@ -106,6 +115,8 @@ def validate_password(password: str) -> tuple[bool, str | None]:
     """
     Validate password strength.
 
+    Aligns with API RegisterRequest: min 8 chars, at least one letter and one digit.
+
     Args:
         password: Password to validate
 
@@ -115,11 +126,17 @@ def validate_password(password: str) -> tuple[bool, str | None]:
     if not password:
         return False, "Password is required"
 
-    if len(password) < 6:
-        return False, "Password must be at least 6 characters"
+    if len(password) < 8:
+        return False, "Password must be at least 8 characters"
 
     if len(password) > 100:
         return False, "Password must be at most 100 characters"
+
+    if not any(c.isalpha() for c in password):
+        return False, "Password must contain at least one letter"
+
+    if not any(c.isdigit() for c in password):
+        return False, "Password must contain at least one digit"
 
     return True, None
 
@@ -142,7 +159,9 @@ def sanitize_search_term(term: str) -> str:
     return term.strip()
 
 
-def validate_json_parameters(params: dict[str, Any], schema: dict[str, Any]) -> tuple[bool, str | None]:
+def validate_json_parameters(
+    params: dict[str, Any], schema: dict[str, Any]
+) -> tuple[bool, str | None]:
     """
     Validate JSON parameters against schema.
 

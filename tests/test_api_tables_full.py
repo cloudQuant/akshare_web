@@ -6,7 +6,6 @@ Covers list, get, schema, data, delete, refresh endpoints.
 
 import pytest
 from httpx import AsyncClient
-from unittest.mock import AsyncMock, patch, MagicMock
 
 
 class TestListTables:
@@ -76,17 +75,30 @@ class TestTableSafeName:
 
     def test_safe_table_name_valid(self):
         """Test valid table name."""
-        from app.api.tables import _safe_table_name
-        assert _safe_table_name("valid_name") == "`valid_name`"
+        from app.utils.helpers import safe_table_name
+
+        assert safe_table_name("valid_name") == "`valid_name`"
 
     def test_safe_table_name_invalid(self):
         """Test invalid table name raises error."""
-        from app.api.tables import _safe_table_name
+        from app.utils.helpers import safe_table_name
+
         with pytest.raises(ValueError):
-            _safe_table_name("invalid-name!")
+            safe_table_name("invalid-name!")
 
     def test_safe_table_name_sql_injection(self):
         """Test SQL injection attempt in table name."""
-        from app.api.tables import _safe_table_name
+        from app.utils.helpers import safe_table_name
+
         with pytest.raises(ValueError):
-            _safe_table_name("table; DROP TABLE users")
+            safe_table_name("table; DROP TABLE users")
+
+    def test_get_safe_table_name_raises_400_on_invalid(self):
+        """Test _get_safe_table_name returns HTTP 400 for invalid names."""
+        from fastapi import HTTPException
+
+        from app.api.tables import _get_safe_table_name
+
+        with pytest.raises(HTTPException) as exc_info:
+            _get_safe_table_name("invalid; DROP TABLE")
+        assert exc_info.value.status_code == 400

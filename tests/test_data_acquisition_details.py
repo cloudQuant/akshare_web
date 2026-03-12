@@ -4,8 +4,9 @@ Data acquisition service detailed tests.
 Tests for DataAcquisitionService methods.
 """
 
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -34,10 +35,10 @@ class TestDataAcquisitionStoreData:
     @pytest.mark.asyncio
     async def test_store_data_creates_table(self, test_db: AsyncSession):
         """Test _store_data creates table record."""
-        from app.services.data_acquisition import DataAcquisitionService
-        from app.models.interface import DataInterface, InterfaceCategory
-        from app.models.data_table import DataTable
         import pandas as pd
+
+        from app.models.interface import DataInterface, InterfaceCategory
+        from app.services.data_acquisition import DataAcquisitionService
 
         # Create category and interface
         category = InterfaceCategory(name="test", description="Test")
@@ -56,20 +57,24 @@ class TestDataAcquisitionStoreData:
         service = DataAcquisitionService()
 
         # Create test data
-        data = pd.DataFrame({
-            "col1": [1, 2, 3],
-            "col2": ["a", "b", "c"],
-        })
+        data = pd.DataFrame(
+            {
+                "col1": [1, 2, 3],
+                "col2": ["a", "b", "c"],
+            }
+        )
 
-        with patch.object(service, '_create_table_if_not_exists'):
-            with patch.object(service, '_insert_data', return_value=3):
-                with patch.object(service, '_update_table_metadata'):  # Mock this to avoid table query
-                    rows_affected = await service._store_data(
-                        data=data,
-                        interface=interface,
-                        execution_id=1,
-                        db=test_db,
-                    )
+        with (
+            patch.object(service, "_create_table_if_not_exists"),
+            patch.object(service, "_insert_data", return_value=3),
+            patch.object(service, "_update_table_metadata"),  # Mock this to avoid table query
+        ):
+            rows_affected = await service._store_data(
+                data=data,
+                interface=interface,
+                execution_id=1,
+                db=test_db,
+            )
 
         assert rows_affected == 3
 

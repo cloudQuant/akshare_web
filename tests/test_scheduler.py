@@ -4,8 +4,9 @@ Scheduler module tests.
 Tests for APScheduler integration and task scheduling.
 """
 
+from datetime import UTC, datetime
+
 import pytest
-from datetime import datetime, UTC
 
 
 class TestSchedulerService:

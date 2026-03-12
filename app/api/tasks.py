@@ -8,26 +8,21 @@ from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db
-from app.api.dependencies import get_current_user, get_current_admin_user
-from app.models.task import ScheduledTask, ScheduleType, TaskStatus
-from app.models.user import User
-from app.models.data_script import DataScript
-from app.services.scheduler import task_scheduler
-from app.services.execution_service import ExecutionService
+from app.api.dependencies import get_current_user
 from app.api.schemas import (
     APIResponse,
     ScheduleTemplate,
-    ScheduleTemplatesResponse,
     TaskCreateRequest,
     TaskUpdateRequest,
-    TaskResponse,
-    PaginatedTaskResponse,
 )
+from app.core.database import get_db
+from app.models.data_script import DataScript
+from app.models.task import ScheduledTask, ScheduleType
+from app.models.user import User
+from app.services.scheduler import task_scheduler
 
 router = APIRouter()
 
@@ -103,7 +98,30 @@ def _task_to_dict(task: ScheduledTask, script_name: str | None = None) -> dict[s
 async def _can_access_task(user_id: int, task: ScheduledTask, is_admin: bool) -> bool:
     """Check if user can access task."""
     from app.core.security import PermissionChecker
+
     return PermissionChecker.can_access_owned_resource(user_id, task.user_id, is_admin)
+
+
+def _apply_task_update(task: ScheduledTask, request: TaskUpdateRequest) -> None:
+    """Apply TaskUpdateRequest fields to ScheduledTask model."""
+    if request.name is not None:
+        task.name = request.name
+    if request.description is not None:
+        task.description = request.description
+    if request.schedule_type is not None:
+        task.schedule_type = ScheduleType(request.schedule_type)
+    if request.schedule_expression is not None:
+        task.schedule_expression = request.schedule_expression
+    if request.parameters is not None:
+        task.parameters = request.parameters
+    if request.is_active is not None:
+        task.is_active = request.is_active
+    if request.retry_on_failure is not None:
+        task.retry_on_failure = request.retry_on_failure
+    if request.max_retries is not None:
+        task.max_retries = request.max_retries
+    if request.timeout is not None:
+        task.timeout = request.timeout
 
 
 @router.get("/schedule/templates")
@@ -111,11 +129,7 @@ async def get_schedule_templates(
     current_user: User = Depends(get_current_user),
 ) -> APIResponse:
     """Get preset schedule templates."""
-    return APIResponse(
-        success=True,
-        message="success",
-        data={"templates": SCHEDULE_TEMPLATES}
-    )
+    return APIResponse(success=True, message="success", data={"templates": SCHEDULE_TEMPLATES})
 
 
 @router.get("/")
@@ -147,9 +161,11 @@ async def list_tasks(
     total = total_result.scalar() or 0
 
     # Get paginated results
-    query = query.order_by(ScheduledTask.created_at.desc()).offset(
-        (page - 1) * page_size
-    ).limit(page_size)
+    query = (
+        query.order_by(ScheduledTask.created_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
 
     result = await db.execute(query)
     tasks = result.scalars().all()
@@ -178,7 +194,7 @@ async def list_tasks(
             "total": total,
             "page": page,
             "page_size": page_size,
-        }
+        },
     )
 
 
@@ -214,7 +230,7 @@ async def create_task(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid schedule type",
-        )
+        ) from None
 
     # Create task
     task = ScheduledTask(
@@ -304,51 +320,30 @@ async def update_task(
             detail="Scheduled task not found",
         )
 
-    # Check access
     if not await _can_access_task(current_user.id, task, current_user.role == UserRole.ADMIN):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied",
         )
 
-    # Update fields
-    if request.name is not None:
-        task.name = request.name
-    if request.description is not None:
-        task.description = request.description
-    if request.schedule_type is not None:
-        try:
-            task.schedule_type = ScheduleType(request.schedule_type)
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid schedule type",
-            )
-    if request.schedule_expression is not None:
-        task.schedule_expression = request.schedule_expression
-    if request.parameters is not None:
-        task.parameters = request.parameters
-    if request.is_active is not None:
-        task.is_active = request.is_active
-    if request.retry_on_failure is not None:
-        task.retry_on_failure = request.retry_on_failure
-    if request.max_retries is not None:
-        task.max_retries = request.max_retries
-    if request.timeout is not None:
-        task.timeout = request.timeout
+    try:
+        _apply_task_update(task, request)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid schedule type",
+        ) from None
 
     task.updated_at = datetime.now(UTC)
 
     await db.commit()
     await db.refresh(task)
 
-    # Update scheduler
     if task.is_active:
         await task_scheduler.update_task(task.id, db)
     else:
         await task_scheduler.remove_task(task.id)
 
-    # Get script info
     script_result = await db.execute(
         select(DataScript).where(DataScript.script_id == task.script_id)
     )
@@ -444,9 +439,7 @@ async def cancel_task(
     """Cancel a running task execution."""
     from app.models.user import UserRole
 
-    result = await db.execute(
-        select(ScheduledTask).where(ScheduledTask.id == task_id)
-    )
+    result = await db.execute(select(ScheduledTask).where(ScheduledTask.id == task_id))
     task = result.scalar_one_or_none()
 
     if task is None:

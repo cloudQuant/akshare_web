@@ -6,20 +6,19 @@ Provides CLI commands for managing the application.
 
 import asyncio
 import sys
-from typing import Any
+from pathlib import Path
 
 import click
 from loguru import logger
 
 from app.core.config import settings
-from app.core.database import create_tables, init_db, close_db
+from app.core.database import create_tables, init_db
 from app.services.interface_loader import InterfaceLoader
 
 
 @click.group()
 def cli() -> None:
     """akshare_web CLI - Financial data management platform."""
-    pass
 
 
 @cli.command()
@@ -44,7 +43,7 @@ def reset_db() -> None:
     """Reset the database (drops all tables and recreates them)."""
 
     async def _reset() -> None:
-        from app.core.database import engine, Base
+        from app.core.database import Base, engine
 
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.drop_all)
@@ -87,10 +86,11 @@ def create_admin(user: str) -> None:
     """Create an admin user."""
 
     async def _create() -> None:
-        from app.core.database import async_session_maker
-        from app.models.user import User, UserRole
-        from app.core.security import hash_password
         from sqlalchemy import select
+
+        from app.core.database import async_session_maker
+        from app.core.security import hash_password
+        from app.models.user import User, UserRole
 
         async with async_session_maker() as db:
             # Check if user exists
@@ -146,7 +146,7 @@ def export_config(output: str) -> None:
     if output == "-":
         click.echo(json.dumps(config, indent=2))
     else:
-        with open(output, "w") as f:
+        with Path(output).open("w") as f:
             json.dump(config, f, indent=2)
         logger.info(f"Configuration exported to {output}")
 
@@ -175,6 +175,7 @@ def check_health() -> None:
 def db_migrate(message: str) -> None:
     """Generate a new Alembic migration from model changes."""
     from alembic.config import Config
+
     from alembic import command
 
     alembic_cfg = Config("alembic.ini")
@@ -187,6 +188,7 @@ def db_migrate(message: str) -> None:
 def db_upgrade(revision: str) -> None:
     """Apply database migrations up to a revision."""
     from alembic.config import Config
+
     from alembic import command
 
     alembic_cfg = Config("alembic.ini")
@@ -199,6 +201,7 @@ def db_upgrade(revision: str) -> None:
 def db_downgrade(revision: str) -> None:
     """Revert database migrations."""
     from alembic.config import Config
+
     from alembic import command
 
     alembic_cfg = Config("alembic.ini")
@@ -210,6 +213,7 @@ def db_downgrade(revision: str) -> None:
 def db_history() -> None:
     """Show migration history."""
     from alembic.config import Config
+
     from alembic import command
 
     alembic_cfg = Config("alembic.ini")

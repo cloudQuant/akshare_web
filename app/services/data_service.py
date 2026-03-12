@@ -6,7 +6,6 @@ Provides a unified interface for script execution used by retry and scheduler se
 
 import asyncio
 import uuid
-from datetime import UTC, datetime
 from typing import Any
 
 from loguru import logger
@@ -23,7 +22,7 @@ class DataService:
     retry and scheduler services.
     """
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession) -> None:
         self.db = db
         self._script_service = ScriptService(db)
 
@@ -74,13 +73,11 @@ class DataService:
             if result.get("success"):
                 logger.info(f"Script {script_id} executed successfully")
             else:
-                logger.warning(
-                    f"Script {script_id} execution failed: {result.get('error')}"
-                )
+                logger.warning(f"Script {script_id} execution failed: {result.get('error')}")
 
             return result
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             error_msg = f"Script {script_id} timed out after {timeout}s"
             logger.error(error_msg)
             return {

@@ -2,23 +2,30 @@
 Direct tests for ExecutionService to maximize coverage.
 """
 
-import pytest
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
-from app.models.task import ScheduledTask, TaskExecution, TaskStatus, TriggeredBy, ScheduleType
-from app.models.data_script import DataScript
-from app.models.user import User, UserRole
+import pytest
+
 from app.core.security import hash_password
+from app.models.data_script import DataScript
+from app.models.task import ScheduledTask, ScheduleType, TaskStatus, TriggeredBy
+from app.models.user import User, UserRole
 from app.services.execution_service import ExecutionService
 
 _counter = 0
 
+
 async def _user(db):
     global _counter
     _counter += 1
-    u = User(username=f"eu{_counter}", email=f"eu{_counter}@t.com",
-             hashed_password=hash_password("P!1"), role=UserRole.ADMIN, is_active=True)
+    u = User(
+        username=f"eu{_counter}",
+        email=f"eu{_counter}@t.com",
+        hashed_password=hash_password("P!1"),
+        role=UserRole.ADMIN,
+        is_active=True,
+    )
     db.add(u)
     await db.commit()
     await db.refresh(u)
@@ -27,6 +34,7 @@ async def _user(db):
 
 async def _script(db, sid="s1"):
     from sqlalchemy import select
+
     result = await db.execute(select(DataScript).where(DataScript.script_id == sid))
     existing = result.scalar_one_or_none()
     if existing:
@@ -42,11 +50,16 @@ async def _task(db, script_id="s1"):
     user = await _user(db)
     await _script(db, script_id)
     t = ScheduledTask(
-        name="test_task", description="desc",
+        name="test_task",
+        description="desc",
         user_id=user.id,
-        script_id=script_id, schedule_type=ScheduleType.DAILY,
-        schedule_expression="08:00", is_active=True,
-        retry_on_failure=True, max_retries=3, timeout=300,
+        script_id=script_id,
+        schedule_type=ScheduleType.DAILY,
+        schedule_expression="08:00",
+        is_active=True,
+        retry_on_failure=True,
+        max_retries=3,
+        timeout=300,
     )
     db.add(t)
     await db.commit()
@@ -60,8 +73,11 @@ class TestCreateExecution:
         svc = ExecutionService(test_db)
         task = await _task(test_db)
         exec_rec = await svc.create_execution(
-            task_id=task.id, script_id="s1",
-            params={"key": "val"}, triggered_by=TriggeredBy.MANUAL, operator_id=1,
+            task_id=task.id,
+            script_id="s1",
+            params={"key": "val"},
+            triggered_by=TriggeredBy.MANUAL,
+            operator_id=1,
         )
         assert exec_rec.execution_id.startswith("exec_")
         assert exec_rec.status == TaskStatus.PENDING
@@ -75,7 +91,9 @@ class TestUpdateExecution:
         exec_rec = await svc.create_execution(task_id=task.id, script_id="s1")
         now = datetime.now(UTC)
         result = await svc.update_execution(
-            exec_rec.execution_id, status=TaskStatus.RUNNING, start_time=now,
+            exec_rec.execution_id,
+            status=TaskStatus.RUNNING,
+            start_time=now,
         )
         assert result is True
 
@@ -85,11 +103,17 @@ class TestUpdateExecution:
         task = await _task(test_db)
         exec_rec = await svc.create_execution(task_id=task.id, script_id="s1")
         start = datetime.now(UTC)
-        await svc.update_execution(exec_rec.execution_id, status=TaskStatus.RUNNING, start_time=start)
+        await svc.update_execution(
+            exec_rec.execution_id, status=TaskStatus.RUNNING, start_time=start
+        )
         end = datetime.now(UTC)
         result = await svc.update_execution(
-            exec_rec.execution_id, status=TaskStatus.COMPLETED, end_time=end,
-            result={"ok": True}, rows_before=0, rows_after=100,
+            exec_rec.execution_id,
+            status=TaskStatus.COMPLETED,
+            end_time=end,
+            result={"ok": True},
+            rows_before=0,
+            rows_after=100,
         )
         assert result is True
 
@@ -99,8 +123,10 @@ class TestUpdateExecution:
         task = await _task(test_db)
         exec_rec = await svc.create_execution(task_id=task.id, script_id="s1")
         result = await svc.update_execution(
-            exec_rec.execution_id, status=TaskStatus.FAILED,
-            error_message="boom", error_trace="traceback...",
+            exec_rec.execution_id,
+            status=TaskStatus.FAILED,
+            error_message="boom",
+            error_trace="traceback...",
             end_time=datetime.now(UTC),
         )
         assert result is True
@@ -174,7 +200,9 @@ class TestGetStats:
         task = await _task(test_db)
         exec_rec = await svc.create_execution(task_id=task.id, script_id="s1")
         now = datetime.now(UTC)
-        await svc.update_execution(exec_rec.execution_id, status=TaskStatus.COMPLETED, start_time=now, end_time=now)
+        await svc.update_execution(
+            exec_rec.execution_id, status=TaskStatus.COMPLETED, start_time=now, end_time=now
+        )
         stats = await svc.get_execution_stats()
         assert stats["total_count"] >= 0
 

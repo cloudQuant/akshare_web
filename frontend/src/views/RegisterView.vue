@@ -4,6 +4,8 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import type { RegisterRequest } from '@/types'
+import { getErrorMessage } from '@/utils/error'
+import type { FormItemRule } from 'element-plus'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -17,7 +19,11 @@ const form = reactive<RegisterRequest & { password_confirm: string }>({
   password_confirm: '',
 })
 
-const validatePasswordConfirm = (_rule: any, value: string, callback: any) => {
+const validatePasswordConfirm = (
+  _rule: FormItemRule,
+  value: string,
+  callback: (err?: Error) => void
+) => {
   if (value !== form.password) {
     callback(new Error('两次输入的密码不一致'))
   } else {
@@ -50,9 +56,10 @@ async function handleRegister() {
     ElMessage.success('注册成功')
 
     router.push('/')
-  } catch (error: any) {
-    if (error?.message) {
-      ElMessage.error(error.message)
+  } catch (error: unknown) {
+    const msg = getErrorMessage(error)
+    if (msg) {
+      ElMessage.error(msg)
     }
   } finally {
     loading.value = false
@@ -81,7 +88,10 @@ function goToLogin() {
         label-width="100px"
         @submit.prevent="handleRegister"
       >
-        <el-form-item label="邮箱" prop="email">
+        <el-form-item
+          label="邮箱"
+          prop="email"
+        >
           <el-input
             v-model="form.email"
             type="email"
@@ -90,7 +100,10 @@ function goToLogin() {
           />
         </el-form-item>
 
-        <el-form-item label="密码" prop="password">
+        <el-form-item
+          label="密码"
+          prop="password"
+        >
           <el-input
             v-model="form.password"
             type="password"
@@ -100,7 +113,10 @@ function goToLogin() {
           />
         </el-form-item>
 
-        <el-form-item label="确认密码" prop="password_confirm">
+        <el-form-item
+          label="确认密码"
+          prop="password_confirm"
+        >
           <el-input
             v-model="form.password_confirm"
             type="password"
@@ -123,7 +139,11 @@ function goToLogin() {
         </el-form-item>
 
         <el-form-item>
-          <el-button text style="width: 100%" @click="goToLogin">
+          <el-button
+            text
+            style="width: 100%"
+            @click="goToLogin"
+          >
             已有账户？立即登录
           </el-button>
         </el-form-item>

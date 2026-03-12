@@ -4,7 +4,7 @@ Data table model for managing stored data.
 Defines model for tracking data tables created by data acquisition.
 """
 
-from datetime import UTC, datetime, date
+from datetime import UTC, date, datetime
 
 from sqlalchemy import BigInteger, Date, DateTime, Enum, String
 from sqlalchemy.orm import Mapped, mapped_column

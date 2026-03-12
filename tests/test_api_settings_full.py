@@ -33,7 +33,9 @@ class TestGetWarehouseConfig:
     """Test get warehouse config endpoint."""
 
     @pytest.mark.asyncio
-    async def test_get_warehouse_config_as_admin(self, test_client: AsyncClient, test_admin_token: str):
+    async def test_get_warehouse_config_as_admin(
+        self, test_client: AsyncClient, test_admin_token: str
+    ):
         """Test getting warehouse config as admin."""
         headers = {"Authorization": f"Bearer {test_admin_token}"}
         response = await test_client.get("/api/settings/database/warehouse", headers=headers)
@@ -91,6 +93,7 @@ class TestUpdateDatabaseConfig:
     async def test_update_db_config(self, test_client: AsyncClient, test_admin_token: str):
         """Test updating database config persists to .env."""
         from unittest.mock import patch
+
         headers = {"Authorization": f"Bearer {test_admin_token}"}
         with patch("app.api.settings._update_env_file"):
             response = await test_client.put(

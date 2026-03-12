@@ -6,8 +6,8 @@ Now that get_data_db is overridden in conftest, we can test schema, data, delete
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.data_table import DataTable
 
@@ -30,7 +30,9 @@ class TestListTablesDetailed:
     """Test list tables with actual data."""
 
     @pytest.mark.asyncio
-    async def test_list_tables_with_data(self, test_client: AsyncClient, test_user_token: str, test_db):
+    async def test_list_tables_with_data(
+        self, test_client: AsyncClient, test_user_token: str, test_db
+    ):
         """Test listing tables returns actual items."""
         await _create_table(test_db, "ak_list_test_1", 1001)
         await _create_table(test_db, "ak_list_test_2", 1002)
@@ -42,7 +44,9 @@ class TestListTablesDetailed:
         assert data["data"]["total"] >= 2
 
     @pytest.mark.asyncio
-    async def test_list_tables_search(self, test_client: AsyncClient, test_user_token: str, test_db):
+    async def test_list_tables_search(
+        self, test_client: AsyncClient, test_user_token: str, test_db
+    ):
         """Test searching tables by name."""
         await _create_table(test_db, "ak_unique_search_xyz", 1003)
 
@@ -79,7 +83,9 @@ class TestGetTableSchema:
         assert response.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_get_schema_table_exists(self, test_client: AsyncClient, test_user_token: str, test_db):
+    async def test_get_schema_table_exists(
+        self, test_client: AsyncClient, test_user_token: str, test_db
+    ):
         """Test getting schema for existing table (DESCRIBE will fail on SQLite but should handle gracefully)."""
         table = await _create_table(test_db, "ak_schema_test", 1020)
 
@@ -103,7 +109,9 @@ class TestGetTableData:
         assert response.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_get_data_table_no_real_table(self, test_client: AsyncClient, test_user_token: str, test_db):
+    async def test_get_data_table_no_real_table(
+        self, test_client: AsyncClient, test_user_token: str, test_db
+    ):
         """Test getting data when actual table doesn't exist in DB (should return 500)."""
         table = await _create_table(test_db, "ak_nonexistent_real_table", 1030)
 
@@ -113,10 +121,14 @@ class TestGetTableData:
         assert response.status_code == 500
 
     @pytest.mark.asyncio
-    async def test_get_data_with_real_table(self, test_client: AsyncClient, test_user_token: str, test_db):
+    async def test_get_data_with_real_table(
+        self, test_client: AsyncClient, test_user_token: str, test_db
+    ):
         """Test getting data from a real SQLite table."""
         # Create an actual table in the test database
-        await test_db.execute(text("CREATE TABLE IF NOT EXISTS ak_real_data (id INTEGER, name TEXT)"))
+        await test_db.execute(
+            text("CREATE TABLE IF NOT EXISTS ak_real_data (id INTEGER, name TEXT)")
+        )
         await test_db.execute(text("INSERT INTO ak_real_data VALUES (1, 'test')"))
         await test_db.execute(text("INSERT INTO ak_real_data VALUES (2, 'test2')"))
         await test_db.commit()
@@ -134,7 +146,9 @@ class TestGetTableData:
         assert data["rows"][0]["id"] == 1
 
     @pytest.mark.asyncio
-    async def test_get_data_pagination(self, test_client: AsyncClient, test_user_token: str, test_db):
+    async def test_get_data_pagination(
+        self, test_client: AsyncClient, test_user_token: str, test_db
+    ):
         """Test getting data with pagination."""
         await test_db.execute(text("CREATE TABLE IF NOT EXISTS ak_paginated (id INTEGER)"))
         for i in range(10):
@@ -144,7 +158,9 @@ class TestGetTableData:
         table = await _create_table(test_db, "ak_paginated", 1032, row_count=10)
 
         headers = {"Authorization": f"Bearer {test_user_token}"}
-        response = await test_client.get(f"/api/tables/{table.id}/data?page=1&page_size=3", headers=headers)
+        response = await test_client.get(
+            f"/api/tables/{table.id}/data?page=1&page_size=3", headers=headers
+        )
         assert response.status_code == 200
         body = response.json()
         data = body.get("data", body)  # Handle APIResponse wrapper
@@ -162,14 +178,18 @@ class TestDeleteTable:
         assert response.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_delete_table_forbidden_for_regular_user(self, test_client: AsyncClient, test_user_token: str):
+    async def test_delete_table_forbidden_for_regular_user(
+        self, test_client: AsyncClient, test_user_token: str
+    ):
         """Test that regular users cannot delete tables."""
         headers = {"Authorization": f"Bearer {test_user_token}"}
         response = await test_client.delete("/api/tables/99999", headers=headers)
         assert response.status_code == 403
 
     @pytest.mark.asyncio
-    async def test_delete_table_success(self, test_client: AsyncClient, test_admin_token: str, test_db):
+    async def test_delete_table_success(
+        self, test_client: AsyncClient, test_admin_token: str, test_db
+    ):
         """Test deleting a table."""
         # Create actual table + metadata
         await test_db.execute(text("CREATE TABLE IF NOT EXISTS ak_delete_me (id INTEGER)"))
@@ -208,14 +228,18 @@ class TestRefreshTableMetadata:
         assert "Refreshed" in data["message"]
 
     @pytest.mark.asyncio
-    async def test_refresh_metadata_forbidden_for_regular_user(self, test_client: AsyncClient, test_user_token: str):
+    async def test_refresh_metadata_forbidden_for_regular_user(
+        self, test_client: AsyncClient, test_user_token: str
+    ):
         """Test that regular users cannot refresh metadata."""
         headers = {"Authorization": f"Bearer {test_user_token}"}
         response = await test_client.post("/api/tables/refresh", headers=headers)
         assert response.status_code == 403
 
     @pytest.mark.asyncio
-    async def test_refresh_metadata_nonexistent_table(self, test_client: AsyncClient, test_admin_token: str, test_db):
+    async def test_refresh_metadata_nonexistent_table(
+        self, test_client: AsyncClient, test_admin_token: str, test_db
+    ):
         """Test refreshing metadata when actual table doesn't exist (should skip)."""
         await _create_table(test_db, "ak_ghost_table", 1051, row_count=50)
 

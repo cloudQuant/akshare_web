@@ -1,5 +1,5 @@
 import request from '@/utils/request'
-import type { ApiResponse, LoginRequest, RegisterRequest, AuthResponse } from '@/types'
+import type { AuthResponse, LoginRequest, RegisterRequest } from '@/types'
 
 export const authApi = {
   // Login

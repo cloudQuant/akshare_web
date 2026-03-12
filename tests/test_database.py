@@ -4,16 +4,15 @@ Database module tests.
 Tests for database initialization, connection, and utilities.
 """
 
-import pytest
-
 
 class TestDatabase:
     """Test database functions."""
 
     def test_get_db_session(self, test_db):
         """Test get_db dependency."""
-        from app.core.database import get_db
         import asyncio
+
+        from app.core.database import get_db
 
         async def check_session():
             gen = get_db()
@@ -22,6 +21,7 @@ class TestDatabase:
             try:
                 assert db is not None
                 from sqlalchemy.ext.asyncio import AsyncSession
+
                 assert isinstance(db, AsyncSession)
             finally:
                 await gen.aclose()

@@ -4,9 +4,10 @@ Comprehensive tests for AkshareProvider.
 Covers initialization, method existence, and mocked execution paths.
 """
 
-import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import patch
+
 import pandas as pd
+import pytest
 
 
 class TestAkshareProviderInit:
@@ -15,6 +16,7 @@ class TestAkshareProviderInit:
     def test_init(self):
         """Test provider initialization."""
         from app.data_fetch.providers.akshare_provider import AkshareProvider
+
         provider = AkshareProvider()
         assert provider is not None
         assert provider.batch_size == 1000
@@ -23,24 +25,28 @@ class TestAkshareProviderInit:
     def test_has_fetch_ak_data(self):
         """Test provider has fetch_ak_data method."""
         from app.data_fetch.providers.akshare_provider import AkshareProvider
+
         provider = AkshareProvider()
-        assert hasattr(provider, 'fetch_ak_data')
+        assert hasattr(provider, "fetch_ak_data")
 
     def test_has_connect_db(self):
         """Test provider has connect_db method."""
         from app.data_fetch.providers.akshare_provider import AkshareProvider
+
         provider = AkshareProvider()
-        assert hasattr(provider, 'connect_db')
+        assert hasattr(provider, "connect_db")
 
     def test_has_disconnect_db(self):
         """Test provider has disconnect_db method."""
         from app.data_fetch.providers.akshare_provider import AkshareProvider
+
         provider = AkshareProvider()
-        assert hasattr(provider, 'disconnect_db')
+        assert hasattr(provider, "disconnect_db")
 
     def test_connect_db_non_mysql(self):
         """Test connect_db returns False for non-MySQL URL."""
         from app.data_fetch.providers.akshare_provider import AkshareProvider
+
         provider = AkshareProvider(db_url="sqlite:///test.db")
         result = provider.connect_db()
         assert result is False
@@ -48,6 +54,7 @@ class TestAkshareProviderInit:
     def test_disconnect_db_no_connection(self):
         """Test disconnect_db when no connection exists."""
         from app.data_fetch.providers.akshare_provider import AkshareProvider
+
         provider = AkshareProvider()
         provider.disconnect_db()  # Should not raise
 
@@ -58,18 +65,22 @@ class TestAkshareProviderFetchData:
     def test_fetch_ak_data_success(self):
         """Test fetching data with mocked akshare function."""
         from app.data_fetch.providers.akshare_provider import AkshareProvider
+
         provider = AkshareProvider()
 
         mock_df = pd.DataFrame({"col1": [1, 2], "col2": ["a", "b"]})
 
-        with patch.object(pd.DataFrame, '__init__', return_value=None):
-            with patch("akshare.stock_zh_a_spot_em", return_value=mock_df, create=True):
-                result = provider.fetch_ak_data("stock_zh_a_spot_em")
-                assert isinstance(result, pd.DataFrame)
+        with (
+            patch.object(pd.DataFrame, "__init__", return_value=None),
+            patch("akshare.stock_zh_a_spot_em", return_value=mock_df, create=True),
+        ):
+            result = provider.fetch_ak_data("stock_zh_a_spot_em")
+            assert isinstance(result, pd.DataFrame)
 
     def test_fetch_ak_data_nonexistent_function(self):
         """Test fetching data with non-existent function."""
         from app.data_fetch.providers.akshare_provider import AkshareProvider
+
         provider = AkshareProvider()
 
         with pytest.raises(AttributeError):
@@ -107,6 +118,7 @@ class TestFuncThread:
     def test_func_thread_timeout(self):
         """Test FuncThread with timeout."""
         import time
+
         from app.data_fetch.providers.akshare_provider import FuncThread
 
         def slow():

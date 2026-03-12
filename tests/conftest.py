@@ -6,15 +6,14 @@ Provides shared test fixtures for all test modules.
 
 import asyncio
 import os
-from typing import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator
 
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.core.config import settings
-from app.core.database import Base, get_db, get_data_db
+from app.core.database import Base, get_data_db, get_db
 from app.main import app
 
 # Set testing environment variable to disable rate limiting
@@ -89,12 +88,12 @@ async def test_client(test_db):
 
 def _clear_blacklist(bl):
     """Clear token blacklist regardless of backend type."""
-    if hasattr(bl, '_blacklist'):
+    if hasattr(bl, "_blacklist"):
         # In-memory backend
         bl._blacklist.clear()
-    elif hasattr(bl, '_redis'):
+    elif hasattr(bl, "_redis"):
         # Redis backend – delete only our namespaced keys
-        import itertools
+
         cursor, keys = bl._redis.scan(match=f"{bl._KEY_PREFIX}*", count=1000)
         all_keys = list(keys)
         while cursor:
@@ -109,6 +108,7 @@ def _clear_test_state():
     """Clear shared state before each test."""
     from app.core.token_blacklist import token_blacklist
     from app.utils.cache import api_cache
+
     _clear_blacklist(token_blacklist)
     api_cache.clear()
     yield
@@ -143,10 +143,13 @@ async def test_user(test_client, test_user_data):
     await test_client.post("/api/auth/register", json=test_user_data)
 
     # Login to get token
-    response = await test_client.post("/api/auth/login", json={
-        "email": test_user_data["email"],
-        "password": test_user_data["password"],
-    })
+    response = await test_client.post(
+        "/api/auth/login",
+        json={
+            "email": test_user_data["email"],
+            "password": test_user_data["password"],
+        },
+    )
 
     data = response.json()
     return data["data"]["access_token"]
@@ -158,8 +161,8 @@ test_user_token = test_user
 
 async def _create_admin_and_login(test_client, test_db, email, password):
     """Helper: create admin user directly and return access token."""
-    from app.models.user import User, UserRole
     from app.core.security import hash_password
+    from app.models.user import User, UserRole
 
     admin = User(
         username=email.split("@")[0],
@@ -171,10 +174,13 @@ async def _create_admin_and_login(test_client, test_db, email, password):
     test_db.add(admin)
     await test_db.commit()
 
-    response = await test_client.post("/api/auth/login", json={
-        "email": email,
-        "password": password,
-    })
+    response = await test_client.post(
+        "/api/auth/login",
+        json={
+            "email": email,
+            "password": password,
+        },
+    )
     data = response.json()
     return data["data"]["access_token"]
 

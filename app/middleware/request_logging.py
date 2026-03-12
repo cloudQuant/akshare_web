@@ -17,9 +17,7 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     """Middleware that logs request details and response time."""
 
-    async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         request_id = str(uuid.uuid4())[:8]
         request.state.request_id = request_id
 
@@ -36,10 +34,14 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
             try:
                 response = await call_next(request)
-            except Exception:
+            except Exception as e:
                 duration_ms = (time.perf_counter() - start_time) * 1000
                 logger.error(
-                    f"{request.method} {path} 500 ({duration_ms:.1f}ms)"
+                    "%s %s 500 (%.1fms) exception=%s",
+                    request.method,
+                    path,
+                    duration_ms,
+                    e,
                 )
                 raise
 
@@ -47,19 +49,17 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
             if not skip_log:
                 log_fn = logger.info if response.status_code < 400 else logger.warning
-                log_fn(
-                    f"{request.method} {path} "
-                    f"{response.status_code} ({duration_ms:.1f}ms)"
-                )
+                log_fn(f"{request.method} {path} {response.status_code} ({duration_ms:.1f}ms)")
 
             # Record metrics for Prometheus endpoint
             try:
                 from app.api.metrics import metrics
+
                 metrics.record_request(
                     request.method, path, response.status_code, duration_ms / 1000
                 )
-            except Exception:
-                pass  # metrics are best-effort
+            except Exception as e:
+                logger.debug("Metrics record skipped: %s", e)
 
         response.headers["X-Request-ID"] = request_id
         return response

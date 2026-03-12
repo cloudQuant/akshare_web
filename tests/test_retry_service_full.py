@@ -4,10 +4,10 @@ Retry service full coverage tests.
 Complete tests for retry_service module to achieve 100% coverage.
 """
 
-import pytest
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
-from datetime import datetime
+from unittest.mock import AsyncMock, Mock
+
+import pytest
 
 
 class TestRetryServiceShouldRetry:
@@ -16,8 +16,8 @@ class TestRetryServiceShouldRetry:
     @pytest.mark.asyncio
     async def test_should_retry_with_enabled_retry(self):
         """Test should retry when retry is enabled."""
-        from app.services.retry_service import RetryService
         from app.models.task import TaskExecution, TaskStatus
+        from app.services.retry_service import RetryService
 
         mock_db = AsyncMock()
         service = RetryService(mock_db)
@@ -36,8 +36,8 @@ class TestRetryServiceShouldRetry:
     @pytest.mark.asyncio
     async def test_should_retry_disabled(self):
         """Test should not retry when disabled."""
-        from app.services.retry_service import RetryService
         from app.models.task import TaskExecution, TaskStatus
+        from app.services.retry_service import RetryService
 
         mock_db = AsyncMock()
         service = RetryService(mock_db)
@@ -56,8 +56,8 @@ class TestRetryServiceShouldRetry:
     @pytest.mark.asyncio
     async def test_should_retry_max_exceeded(self):
         """Test should not retry when max retries exceeded."""
-        from app.services.retry_service import RetryService
         from app.models.task import TaskExecution, TaskStatus
+        from app.services.retry_service import RetryService
 
         mock_db = AsyncMock()
         service = RetryService(mock_db)
@@ -76,8 +76,8 @@ class TestRetryServiceShouldRetry:
     @pytest.mark.asyncio
     async def test_should_retry_not_failed(self):
         """Test should not retry when not failed."""
-        from app.services.retry_service import RetryService
         from app.models.task import TaskExecution, TaskStatus
+        from app.services.retry_service import RetryService
 
         mock_db = AsyncMock()
         service = RetryService(mock_db)
@@ -100,8 +100,8 @@ class TestRetryServiceScheduleRetry:
     @pytest.mark.asyncio
     async def test_schedule_retry_success(self):
         """Test successful retry scheduling."""
-        from app.services.retry_service import RetryService
         from app.models.task import TaskExecution, TaskStatus
+        from app.services.retry_service import RetryService
 
         mock_db = AsyncMock()
         service = RetryService(mock_db)
@@ -124,8 +124,8 @@ class TestRetryServiceScheduleRetry:
     @pytest.mark.asyncio
     async def test_schedule_retry_should_not_retry(self):
         """Test schedule retry when should not retry."""
-        from app.services.retry_service import RetryService
         from app.models.task import TaskExecution, TaskStatus
+        from app.services.retry_service import RetryService
 
         mock_db = AsyncMock()
         service = RetryService(mock_db)
@@ -201,7 +201,7 @@ class TestRetryServiceGetRetryStatus:
         async def long_task():
             try:
                 await asyncio.wait_for(stop_event.wait(), timeout=10)
-            except (asyncio.TimeoutError, asyncio.CancelledError):
+            except (TimeoutError, asyncio.CancelledError):
                 raise
 
         task = asyncio.create_task(long_task())
@@ -218,7 +218,7 @@ class TestRetryServiceGetRetryStatus:
             try:
                 task.cancel()
                 await asyncio.wait_for(task, timeout=0.1)
-            except:
+            except (Exception, asyncio.CancelledError):
                 pass
 
 
@@ -249,7 +249,7 @@ class TestRetryServiceGetAllPending:
         async def dummy_task():
             try:
                 await asyncio.wait_for(stop_event.wait(), timeout=1)
-            except (asyncio.TimeoutError, asyncio.CancelledError):
+            except (TimeoutError, asyncio.CancelledError):
                 raise
 
         task1 = asyncio.create_task(dummy_task())
@@ -270,7 +270,7 @@ class TestRetryServiceGetAllPending:
                 task1.cancel()
                 task2.cancel()
                 await asyncio.gather(task1, task2, return_exceptions=True)
-            except:
+            except Exception:
                 pass
 
 
@@ -301,7 +301,7 @@ class TestRetryServiceCancelPending:
         async def dummy_task():
             try:
                 await asyncio.wait_for(stop_event.wait(), timeout=10)
-            except (asyncio.TimeoutError, asyncio.CancelledError):
+            except (TimeoutError, asyncio.CancelledError):
                 raise
 
         task = asyncio.create_task(dummy_task())
@@ -318,7 +318,7 @@ class TestRetryServiceCancelPending:
                 if not task.done():
                     task.cancel()
                     await asyncio.wait_for(task, timeout=0.1)
-            except:
+            except (Exception, asyncio.CancelledError):
                 pass
 
 

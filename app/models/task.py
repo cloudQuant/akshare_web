@@ -8,7 +8,18 @@ import enum
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Enum, ForeignKey, Index, Integer, JSON, Numeric, String, Text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -68,7 +79,7 @@ class ScheduledTask(Base):
     """
 
     __tablename__ = "scheduled_tasks"
-    __table_args__ = (
+    __table_args__ = (  # type: ignore[assignment]
         Index("ix_scheduled_tasks_user_active", "user_id", "is_active"),
         {
             "extend_existing": True,
@@ -139,8 +150,12 @@ class ScheduledTask(Base):
             "retry_on_failure": self.retry_on_failure,
             "max_retries": self.max_retries,
             "timeout": self.timeout,
-            "last_execution_at": self.last_execution_at.isoformat() if self.last_execution_at else None,
-            "next_execution_at": self.next_execution_at.isoformat() if self.next_execution_at else None,
+            "last_execution_at": self.last_execution_at.isoformat()
+            if self.last_execution_at
+            else None,
+            "next_execution_at": self.next_execution_at.isoformat()
+            if self.next_execution_at
+            else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
@@ -178,7 +193,7 @@ class TaskExecution(Base):
     """
 
     __tablename__ = "task_executions"
-    __table_args__ = (
+    __table_args__ = (  # type: ignore[assignment]
         Index("ix_task_executions_task_status", "task_id", "status"),
         Index("ix_task_executions_start_time", "start_time"),
         Index("ix_task_executions_script_id", "script_id"),
@@ -190,9 +205,7 @@ class TaskExecution(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    execution_id: Mapped[str] = mapped_column(
-        String(100), unique=True, index=True, nullable=False
-    )
+    execution_id: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=False)
     task_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("scheduled_tasks.id"),

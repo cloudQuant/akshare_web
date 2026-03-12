@@ -4,12 +4,13 @@ Comprehensive tests for script service.
 Covers ScriptService CRUD, toggle, categories, stats, scan operations.
 """
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.script_service import ScriptService
 from app.models.data_script import DataScript, ScriptFrequency
+from app.services.script_service import ScriptService
 
 
 class TestScriptServiceGetScripts:
@@ -337,6 +338,7 @@ class TestScriptServiceSerialize:
     def test_serialize_dataframe(self):
         """Test serializing DataFrame result."""
         import pandas as pd
+
         service = ScriptService(AsyncMock())
         df = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
         result = service._serialize_result(df)
@@ -349,6 +351,7 @@ class TestScriptServiceSerialize:
 
         class MyObj:
             x = 1
+
         result = service._serialize_result(MyObj())
         assert isinstance(result, str)
 

@@ -9,12 +9,11 @@ These models are tested in production with MySQL.
 """
 
 import pytest
-from datetime import UTC, datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.user import User, UserRole
 from app.models.data_table import DataTable
 from app.models.interface import DataInterface, InterfaceCategory
+from app.models.user import User, UserRole
 
 
 class TestUser:

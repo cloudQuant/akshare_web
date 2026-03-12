@@ -5,7 +5,6 @@ Tests for SchedulerService functionality.
 """
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 
 class TestSchedulerServiceLifecycle:
@@ -269,9 +268,9 @@ class TestTriggerValidation:
         from app.models.task import ScheduleType
 
         # Check common schedule types exist
-        assert hasattr(ScheduleType, 'ONCE')
-        assert hasattr(ScheduleType, 'DAILY')
-        assert hasattr(ScheduleType, 'WEEKLY')
-        assert hasattr(ScheduleType, 'MONTHLY')
-        assert hasattr(ScheduleType, 'CRON')
-        assert hasattr(ScheduleType, 'INTERVAL')
+        assert hasattr(ScheduleType, "ONCE")
+        assert hasattr(ScheduleType, "DAILY")
+        assert hasattr(ScheduleType, "WEEKLY")
+        assert hasattr(ScheduleType, "MONTHLY")
+        assert hasattr(ScheduleType, "CRON")
+        assert hasattr(ScheduleType, "INTERVAL")

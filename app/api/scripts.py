@@ -7,15 +7,14 @@ Provides endpoints for managing data acquisition scripts.
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.dependencies import get_current_admin_user, get_current_user
+from app.api.schemas import APIResponse, ErrorResponse, ScriptCreateRequest, ScriptUpdateRequest
 from app.core.database import get_db
-from app.api.dependencies import get_current_user, get_current_admin_user
-from app.api.schemas import APIResponse, ScriptCreateRequest, ScriptUpdateRequest
-from app.models.user import User
 from app.models.data_script import DataScript, ScriptFrequency
+from app.models.user import User
 from app.services.script_service import ScriptService
 
 router = APIRouter()
@@ -68,7 +67,7 @@ async def get_scripts(
             "total": total,
             "page": page,
             "page_size": page_size,
-        }
+        },
     )
 
 
@@ -80,11 +79,7 @@ async def get_script_stats(
     """Get script statistics."""
     service = ScriptService(db)
     stats = await service.get_script_stats()
-    return APIResponse(
-        success=True,
-        message="success",
-        data=stats
-    )
+    return APIResponse(success=True, message="success", data=stats)
 
 
 @router.post("/scan")
@@ -99,11 +94,7 @@ async def scan_scripts(
     """
     service = ScriptService(db)
     result = await service.scan_and_register_scripts()
-    return APIResponse(
-        success=True,
-        message="Scan completed",
-        data=result
-    )
+    return APIResponse(success=True, message="Scan completed", data=result)
 
 
 @router.get("/categories")
@@ -121,14 +112,16 @@ async def get_script_categories(
     service = ScriptService(db)
     categories = await service.get_categories()
     api_cache.set("script_categories", categories, ttl=300)  # 5 min cache
-    return APIResponse(
-        success=True,
-        message="success",
-        data=categories
-    )
+    return APIResponse(success=True, message="success", data=categories)
 
 
-@router.get("/{script_id}")
+@router.get(
+    "/{script_id}",
+    responses={
+        401: {"model": ErrorResponse, "description": "Not authenticated"},
+        404: {"model": ErrorResponse, "description": "Script not found"},
+    },
+)
 async def get_script(
     script_id: str,
     db: AsyncSession = Depends(get_db),
@@ -139,13 +132,9 @@ async def get_script(
     script = await service.get_script(script_id)
 
     if not script:
-        raise HTTPException(status_code=404, detail="Script not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Script not found")
 
-    return APIResponse(
-        success=True,
-        message="success",
-        data=_script_to_dict(script)
-    )
+    return APIResponse(success=True, message="success", data=_script_to_dict(script))
 
 
 @router.put("/{script_id}/toggle")
@@ -163,18 +152,23 @@ async def toggle_script(
     script = await service.get_script(script_id)
 
     if not script:
-        raise HTTPException(status_code=404, detail="Script not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Script not found")
 
     updated = await service.update_script(script_id, is_active=not script.is_active)
-    return APIResponse(
-        success=True,
-        message="Script status updated",
-        data=_script_to_dict(updated)
-    )
+    if updated is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Script not found")
+    return APIResponse(success=True, message="Script status updated", data=_script_to_dict(updated))
 
 
 # Admin-only endpoints for custom script management
-@router.post("/admin/scripts", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/admin/scripts",
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        400: {"model": ErrorResponse, "description": "Script ID already exists"},
+        403: {"model": ErrorResponse, "description": "Admin required"},
+    },
+)
 async def create_custom_script(
     request: ScriptCreateRequest,
     current_admin: User = Depends(get_current_admin_user),
@@ -186,9 +180,7 @@ async def create_custom_script(
     Requires admin privileges.
     """
     # Check if script_id already exists
-    result = await db.execute(
-        select(DataScript).where(DataScript.script_id == request.script_id)
-    )
+    result = await db.execute(select(DataScript).where(DataScript.script_id == request.script_id))
     if result.scalar_one_or_none() is not None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -218,9 +210,7 @@ async def create_custom_script(
     await db.refresh(script)
 
     return APIResponse(
-        success=True,
-        message="Script created successfully",
-        data=_script_to_dict(script)
+        success=True, message="Script created successfully", data=_script_to_dict(script)
     )
 
 
@@ -237,9 +227,7 @@ async def update_script(
     Requires admin privileges.
     System scripts (is_custom=False) have restrictions on category changes.
     """
-    result = await db.execute(
-        select(DataScript).where(DataScript.script_id == script_id)
-    )
+    result = await db.execute(select(DataScript).where(DataScript.script_id == script_id))
     script = result.scalar_one_or_none()
 
     if script is None:
@@ -266,9 +254,7 @@ async def update_script(
     await db.refresh(script)
 
     return APIResponse(
-        success=True,
-        message="Script updated successfully",
-        data=_script_to_dict(script)
+        success=True, message="Script updated successfully", data=_script_to_dict(script)
     )
 
 
@@ -284,9 +270,7 @@ async def delete_script(
     Requires admin privileges.
     System scripts (is_custom=False) cannot be deleted.
     """
-    result = await db.execute(
-        select(DataScript).where(DataScript.script_id == script_id)
-    )
+    result = await db.execute(select(DataScript).where(DataScript.script_id == script_id))
     script = result.scalar_one_or_none()
 
     if script is None:
@@ -306,7 +290,5 @@ async def delete_script(
     await db.commit()
 
     return APIResponse(
-        success=True,
-        message="Custom script deleted successfully",
-        data={"script_id": script_id}
+        success=True, message="Custom script deleted successfully", data={"script_id": script_id}
     )
