@@ -1,7 +1,15 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { Document, CircleCheck, CircleClose, TrendCharts, DataLine, Timer
- Grid, Refresh } from '@element-plus/icons-vue'
+import {
+  Document,
+  CircleCheck,
+  CircleClose,
+  TrendCharts,
+  DataLine,
+  Timer,
+  Grid,
+  Refresh,
+} from '@element-plus/icons-vue'
 import { dataApi } from '@/api/data'
 import { scriptsApi } from '@/api/scripts'
 import { StatCard } from '@/components/common'
@@ -25,7 +33,7 @@ async function loadStats() {
     if (scriptsData?.items) recentScripts.value = scriptsData.items
   } catch (e) {
     error.value = e instanceof Error ? e.message : '加载数据失败'
-      logger.error('Failed to load stats:', e as { originalError: e })
+    logger.error('Failed to load stats:', e)
   } finally {
     loading.value = false
   }
