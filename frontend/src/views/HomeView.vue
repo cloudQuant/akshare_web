@@ -40,11 +40,11 @@ async function loadStats() {
 }
 
 function handleRetry() {
-  loadStats()
+  void loadStats()
 }
 
-onMounted(() => {
-  loadStats()
+onMounted(async () => {
+  await loadStats()
 })
 </script>
 

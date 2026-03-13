@@ -51,11 +51,15 @@ async function handleRegister() {
     await formRef.value.validate()
     loading.value = true
 
-    await authStore.register(form)
+    await authStore.register({
+      email: form.email,
+      password: form.password,
+    })
 
     ElMessage.success('注册成功')
 
-    router.push('/')
+    // Redirect to login page
+    await router.push('/login')
   } catch (error: unknown) {
     const msg = getErrorMessage(error)
     if (msg) {
@@ -67,7 +71,7 @@ async function handleRegister() {
 }
 
 function goToLogin() {
-  router.push('/login')
+  void router.push('/login')
 }
 </script>
 

@@ -39,18 +39,13 @@ async function loadTables() {
 }
 
 function handleViewDetail(table: DataTable) {
-  router.push(`/tables/${table.id}`)
-}
-
-function handlePageChange(page: number) {
-  currentPage.value = page
-  loadTables()
+  void router.push(`/tables/${table.id}`)
 }
 
 function handleSizeChange(size: number) {
   pageSize.value = size
   currentPage.value = 1
-  loadTables()
+  void loadTables()
 }
 
 function handleSearch() {
@@ -59,12 +54,12 @@ function handleSearch() {
   }
   searchDebounceTimer = setTimeout(() => {
     currentPage.value = 1
-    loadTables()
+    void loadTables()
   }, 300)
 }
 
 onMounted(() => {
-  loadTables()
+  void loadTables()
 })
 </script>
 

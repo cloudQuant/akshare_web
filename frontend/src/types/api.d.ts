@@ -5,23 +5,41 @@
 
 export interface paths {
   [key: string]: {
-    get: operations
+    get?: operations
     post?: Operation
-  delete?: Operation
-  put?: Operation
-  parameters?: {
-    path?: {
-      name?: string
-      in?: string
-      required?: boolean
-      schema?: {
-        type: string
+    delete?: Operation
+    put?: Operation
+    parameters?: {
+      path?: {
+        name?: string
+        in?: string
+        required?: boolean
+        schema?: {
+          type: string
+        }
+      }
+    }
+    body?: {
+      content?: unknown
+      description?: string
+    }
+  }
+}
+
+export interface Operation {
+  parameters?: unknown[]
+  responses?: {
+    [key: string]: {
+      description?: string
+      content?: {
+        [key: string]: {
+          schema?: unknown
+        }
       }
     }
   }
-  body?: {
-    content?: unknown
-    description?: string
-  }
 }
- */
+
+export interface operations {
+  [key: string]: Operation
+}

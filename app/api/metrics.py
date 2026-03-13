@@ -125,7 +125,7 @@ class _RedisMetricsAggregator:
         if not r:
             return
         try:
-            key = f"{self._prefix}:{name}:{':'.join(f'{k}={v}' for k, v in sorted(labels.items())}"
+            key = f"{self._prefix}:{name}:{':'.join(f'{k}={v}' for k, v in sorted(labels.items()))}"
             await r.incrbyfloat(key, value)
             await r.expire(key, self._ttl)
         except Exception as e:

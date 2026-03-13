@@ -203,10 +203,6 @@ onMounted(() => {
   </div>
 </template>
 
-<script lang="ts">
-import { computed } from 'vue'
-</script>
-
 <style scoped>
 .users-view {
   padding: 0;

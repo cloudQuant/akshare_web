@@ -45,7 +45,7 @@ const menuItems = computed(() => {
 
 function handleLogout() {
   authStore.logout()
-  router.push('/login')
+  void router.push('/login')
 }
 
 function toggleCollapse() {

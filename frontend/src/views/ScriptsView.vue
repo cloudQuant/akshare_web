@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { scriptsApi } from '@/api/scripts'
@@ -45,19 +45,20 @@ async function loadCategories() {
   }
 }
 
-function handlePageChange(page: number) {
-  currentPage.value = page
-  loadScripts()
+function handleSizeChange(size: number) {
+  pageSize.value = size
+  currentPage.value = 1
+  void loadScripts()
 }
 
 function handleViewDetail(script: DataScript) {
-  router.push(`/scripts/${script.script_id}`)
+  void router.push(`/scripts/${script.script_id}`)
 }
 
 function handleCategoryChange(category: string | number | boolean | undefined) {
   selectedCategory.value = String(category ?? '')
   currentPage.value = 1
-  loadScripts()
+  void loadScripts()
 }
 
 function handleSearch() {
@@ -66,19 +67,13 @@ function handleSearch() {
   }
   searchDebounceTimer = setTimeout(() => {
     currentPage.value = 1
-    loadScripts()
+    void loadScripts()
   }, 300)
 }
 
-function handleSizeChange(size: number) {
-  pageSize.value = size
-  currentPage.value = 1
-  loadScripts()
-}
-
 onMounted(() => {
-  loadCategories()
-  loadScripts()
+  void loadCategories()
+  void loadScripts()
 })
 </script>
 

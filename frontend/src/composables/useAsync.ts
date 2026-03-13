@@ -6,18 +6,28 @@ export interface UseAsyncOptions<T> {
   showLoading?: boolean
   showError?: boolean
   resetOnError?: boolean
+  onError?: (error: Error) => void
+}
+
+export interface UseAsyncReturn<T> {
+  data: ShallowRef<T | null>
+  loading: ShallowRef<boolean>
+  error: ShallowRef<string | null>
+  isError: ShallowRef<boolean>
+  execute: () => Promise<T | null>
+  reset: () => void
 }
 
 export function useAsync<T>(
   asyncFn: () => Promise<T>,
   options: UseAsyncOptions<T> = {}
-): {
+): UseAsyncReturn<T> {
   const data = shallowRef<T | null>(null)
   const loading = ref(false)
   const error = shallowRef<string | null>(null)
   const isError = shallowRef<boolean>(false)
 
-  async function execute() {
+  async function execute(): Promise<T | null> {
     loading.value = true
     error.value = null
     isError.value = false
@@ -31,7 +41,7 @@ export function useAsync<T>(
       error.value = errorMessage
       isError.value = true
       if (options.onError) {
-        console.error(errorMessage)
+        options.onError(e instanceof Error ? e : new Error(errorMessage))
       }
       return null
     } finally {
@@ -39,7 +49,7 @@ export function useAsync<T>(
     }
   }
 
-  function reset() {
+  function reset(): void {
     data.value = null
     loading.value = false
     error.value = null

@@ -35,7 +35,7 @@ async function handleDownload() {
     const result = await dataApi.download(script.value.id, {})
     executionId.value = result.execution_id
     ElMessage.success('下载任务已创建')
-    router.push('/executions')
+    await router.push('/executions')
   } catch (error) {
     ElMessage.error(getApiErrorMessage(error) || '创建下载任务失败')
   } finally {
@@ -44,11 +44,11 @@ async function handleDownload() {
 }
 
 function goBack() {
-  router.back()
+  void router.back()
 }
 
 onMounted(() => {
-  loadScript()
+  void loadScript()
 })
 </script>
 

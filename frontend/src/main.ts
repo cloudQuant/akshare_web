@@ -30,10 +30,10 @@ app.use(ElementPlus, { locale: zhCn })
 const themeStore = useThemeStore()
 themeStore.initTheme()
 
-;(async () => {
+void (async () => {
   if (import.meta.env.DEV) {
     const { worker } = await import('./mocks/browser')
-    worker.start({ onUnhandledRequests: 'warn' })
+    await worker.start({ onUnhandledRequests: 'warn' })
   }
 })()
 

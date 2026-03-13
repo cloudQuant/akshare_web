@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { ElMessage } from 'element-plus'
 import { dataApi } from '@/api/data'
 import { getApiErrorMessage } from '@/utils/error'
 import type { Execution, ExecutionStats, PaginatedResponse } from '@/types'
@@ -22,8 +23,6 @@ const statusMap: Record<
   success: { text: '成功', type: 'success' },
   failed: { text: '失败', type: 'danger' },
 }
-
-let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
 
 async function loadExecutions() {
   loading.value = true
@@ -53,13 +52,13 @@ async function loadStats() {
 
 function handlePageChange(page: number) {
   currentPage.value = page
-  loadExecutions()
+  void loadExecutions()
 }
 
 function handleSizeChange(size: number) {
   pageSize.value = size
   currentPage.value = 1
-  loadExecutions()
+  void loadExecutions()
 }
 
 function getStatusInfo(status: string) {
@@ -69,15 +68,14 @@ function getStatusInfo(status: string) {
 async function handleRetry(execution: Execution) {
   try {
     await dataApi.retry(execution.id)
-    loadExecutions()
+    await loadExecutions()
   } catch (e) {
     ElMessage.error(getApiErrorMessage(e))
   }
 }
 
-onMounted(() => {
-  loadExecutions()
-  loadStats()
+onMounted(async () => {
+  await Promise.all([loadExecutions(), loadStats()])
 })
 </script>
 

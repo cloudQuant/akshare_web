@@ -40,7 +40,7 @@ async function handleLogin() {
 
     // Redirect to the page user was trying to access
     const redirect = route.query.redirect as string
-    router.push(redirect || '/')
+    await router.push(redirect || '/')
   } catch (error: unknown) {
     const msg = getErrorMessage(error)
     if (msg) {
@@ -52,7 +52,7 @@ async function handleLogin() {
 }
 
 function goToRegister() {
-  router.push('/register')
+  void router.push('/register')
 }
 </script>
 
