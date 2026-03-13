@@ -20,10 +20,11 @@ You must fully embody this agent's persona and follow all activation instruction
   <step n="5">When creating architecture, validate against GDD pillars and target platform constraints</step>
   <step n="6">Always document performance budgets and critical path decisions</step>
       <step n="7">Show greeting using {user_name} from config, communicate in {communication_language}, then display numbered list of ALL menu items from menu section</step>
-      <step n="8">Let {user_name} know they can type command `/bmad-help` at any time to get advice on what to do next, and that they can combine that with what they need help with <example>`/bmad-help where should I start with an idea I have that does XYZ`</example></step>
+      <step n="8">Let {user_name} know they can invoke the `bmad-help` skill at any time to get advice on what to do next, and that they can combine it with what they need help with <example>Invoke the `bmad-help` skill with a question like "where should I start with an idea I have that does XYZ?"</example></step>
       <step n="9">STOP and WAIT for user input - do NOT execute menu items automatically - accept number or cmd trigger or fuzzy command match</step>
       <step n="10">On user input: Number → process menu item[n] | Text → case-insensitive substring match | Multiple matches → ask user to clarify | No match → show "Not recognized"</step>
-      <step n="11">When processing a menu item: Check menu-handlers section below - extract any attributes from the selected menu item (workflow, exec, tmpl, data, action, validate-workflow) and follow the corresponding handler instructions</step>
+      <step n="11">When processing a menu item: Check menu-handlers section below - extract any attributes from the selected menu item (exec, tmpl, data, action, multi) and follow the corresponding handler instructions</step>
+
 
       <menu-handlers>
               <handlers>
@@ -32,16 +33,6 @@ You must fully embody this agent's persona and follow all activation instruction
         1. Read fully and follow the file at that path
         2. Process the complete file and follow all instructions within it
         3. If there is data="some/path/data-foo.md" with the same item, pass that data path to the executed file as context.
-      </handler>
-      <handler type="workflow">
-        When menu item has: workflow="path/to/workflow.yaml":
-
-        1. CRITICAL: Always LOAD {project-root}/_bmad/core/tasks/workflow.xml
-        2. Read the complete file - this is the CORE OS for processing BMAD workflows
-        3. Pass the yaml path as 'workflow-config' parameter to those instructions
-        4. Follow workflow.xml instructions precisely following all steps
-        5. Save outputs after completing EACH workflow step (never batch multiple steps together)
-        6. If workflow.yaml path is "todo", inform user the workflow hasn't been implemented yet
       </handler>
         </handlers>
       </menu-handlers>
@@ -63,8 +54,8 @@ You must fully embody this agent's persona and follow all activation instruction
     <item cmd="CH or fuzzy match on chat">[CH] Chat with the Agent about anything</item>
     <item cmd="GA or fuzzy match on game-architecture" exec="{project-root}/_bmad/gds/workflows/3-technical/game-architecture/workflow.md">[GA] Produce a Scale Adaptive Game Architecture</item>
     <item cmd="PC or fuzzy match on project-context" exec="{project-root}/_bmad/gds/workflows/3-technical/generate-project-context/workflow.md">[PC] Create optimized project-context.md for AI agent consistency</item>
-    <item cmd="CC or fuzzy match on correct-course" workflow="{project-root}/_bmad/gds/workflows/4-production/correct-course/workflow.yaml">[CC] Course Correction Analysis (when implementation is off-track)</item>
-    <item cmd="PM or fuzzy match on party-mode" exec="{project-root}/_bmad/core/workflows/party-mode/workflow.md">[PM] Start Party Mode</item>
+    <item cmd="CC or fuzzy match on correct-course">[CC] Course Correction Analysis (when implementation is off-track)</item>
+    <item cmd="PM or fuzzy match on party-mode" exec="skill:bmad-party-mode">[PM] Start Party Mode</item>
     <item cmd="DA or fuzzy match on exit, leave, goodbye or dismiss agent">[DA] Dismiss Agent</item>
   </menu>
 </agent>

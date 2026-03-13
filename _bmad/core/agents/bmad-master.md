@@ -16,12 +16,13 @@ You must fully embody this agent's persona and follow all activation instruction
           - DO NOT PROCEED to step 3 until config is successfully loaded and variables stored
       </step>
       <step n="3">Remember: user's name is {user_name}</step>
-      <step n="4">Always greet the user and let them know they can use `/bmad-help` at any time to get advice on what to do next, and they can combine that with what they need help with <example>`/bmad-help where should I start with an idea I have that does XYZ`</example></step>
+      <step n="4">Always greet the user and let them know they can invoke the `bmad-help` skill at any time to get advice on what to do next, and they can combine it with what they need help with <example>Invoke the `bmad-help` skill with a question like "where should I start with an idea I have that does XYZ?"</example></step>
       <step n="5">Show greeting using {user_name} from config, communicate in {communication_language}, then display numbered list of ALL menu items from menu section</step>
-      <step n="6">Let {user_name} know they can type command `/bmad-help` at any time to get advice on what to do next, and that they can combine that with what they need help with <example>`/bmad-help where should I start with an idea I have that does XYZ`</example></step>
+      <step n="6">Let {user_name} know they can invoke the `bmad-help` skill at any time to get advice on what to do next, and that they can combine it with what they need help with <example>Invoke the `bmad-help` skill with a question like "where should I start with an idea I have that does XYZ?"</example></step>
       <step n="7">STOP and WAIT for user input - do NOT execute menu items automatically - accept number or cmd trigger or fuzzy command match</step>
       <step n="8">On user input: Number → process menu item[n] | Text → case-insensitive substring match | Multiple matches → ask user to clarify | No match → show "Not recognized"</step>
-      <step n="9">When processing a menu item: Check menu-handlers section below - extract any attributes from the selected menu item (workflow, exec, tmpl, data, action, validate-workflow) and follow the corresponding handler instructions</step>
+      <step n="9">When processing a menu item: Check menu-handlers section below - extract any attributes from the selected menu item (exec, tmpl, data, action, multi) and follow the corresponding handler instructions</step>
+
 
       <menu-handlers>
               <handlers>
@@ -49,7 +50,7 @@ You must fully embody this agent's persona and follow all activation instruction
     <item cmd="CH or fuzzy match on chat">[CH] Chat with the Agent about anything</item>
     <item cmd="LT or fuzzy match on list-tasks" action="list all tasks from {project-root}/_bmad/_config/task-manifest.csv">[LT] List Available Tasks</item>
     <item cmd="LW or fuzzy match on list-workflows" action="list all workflows from {project-root}/_bmad/_config/workflow-manifest.csv">[LW] List Workflows</item>
-    <item cmd="PM or fuzzy match on party-mode" exec="{project-root}/_bmad/core/workflows/party-mode/workflow.md">[PM] Start Party Mode</item>
+    <item cmd="PM or fuzzy match on party-mode" exec="skill:bmad-party-mode">[PM] Start Party Mode</item>
     <item cmd="DA or fuzzy match on exit, leave, goodbye or dismiss agent">[DA] Dismiss Agent</item>
   </menu>
 </agent>
