@@ -1,28 +1,43 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
+import { useThemeStore } from '@/stores/theme'
+import { setLocale } from '@/i18n'
+import { Sunny, Moon } from '@element-plus/icons-vue'
 
+const { t, locale } = useI18n()
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
+const themeStore = useThemeStore()
 
 const isCollapse = ref(false)
 const activeMenu = computed(() => route.path)
 
+const languageOptions = [
+  { label: '简体中文', value: 'zh-CN' },
+  { label: 'English', value: 'en-US' },
+]
+
+onMounted(() => {
+  themeStore.initTheme()
+})
+
 const menuItems = computed(() => {
   const items = [
-    { index: '/', name: '首页', icon: 'HomeFilled' },
-    { index: '/scripts', name: '数据接口', icon: 'DataLine' },
-    { index: '/tasks', name: '定时任务', icon: 'Timer' },
-    { index: '/executions', name: '执行记录', icon: 'Document' },
-    { index: '/tables', name: '数据表', icon: 'Grid' },
+    { index: '/', name: t('nav.home'), icon: 'HomeFilled' },
+    { index: '/scripts', name: t('nav.scripts'), icon: 'Document' },
+    { index: '/tasks', name: t('nav.tasks'), icon: 'Timer' },
+    { index: '/executions', name: t('nav.executions'), icon: 'List' },
+    { index: '/tables', name: t('nav.tables'), icon: 'Grid' },
   ]
 
   if (authStore.isAdmin) {
-    items.push({ index: '/admin/interfaces', name: '接口管理', icon: 'Management' })
-    items.push({ index: '/users', name: '用户管理', icon: 'User' })
-    items.push({ index: '/settings', name: '设置', icon: 'Setting' })
+    items.push({ index: '/admin/interfaces', name: t('nav.interfaceManagement'), icon: 'Setting' })
+    items.push({ index: '/users', name: t('nav.users'), icon: 'User' })
+    items.push({ index: '/settings', name: t('nav.settings'), icon: 'Setting' })
   }
 
   return items
@@ -36,11 +51,18 @@ function handleLogout() {
 function toggleCollapse() {
   isCollapse.value = !isCollapse.value
 }
+
+function handleThemeToggle() {
+  themeStore.toggleTheme()
+}
+
+function handleLanguageChange(lang: string) {
+  setLocale(lang)
+}
 </script>
 
 <template>
   <el-container class="layout-container">
-    <!-- Sidebar -->
     <el-aside
       :width="isCollapse ? '64px' : '200px'"
       class="sidebar"
@@ -68,7 +90,6 @@ function toggleCollapse() {
       </el-menu>
     </el-aside>
 
-    <!-- Main Content -->
     <el-container>
       <el-header class="header">
         <div class="header-left">
@@ -79,31 +100,48 @@ function toggleCollapse() {
           />
         </div>
         <div class="header-right">
+          <el-dropdown @command="handleLanguageChange">
+            <el-button text>
+              {{ locale === 'zh-CN' ? '中文' : 'EN' }}
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item
+                  v-for="lang in languageOptions"
+                  :key="lang.value"
+                  :command="lang.value"
+                  :disabled="locale === lang.value"
+                >
+                  {{ lang.label }}
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+          <el-tooltip :content="themeStore.mode === 'dark' ? t('theme.toggleLight') : t('theme.toggleDark')">
+            <el-button
+              :icon="themeStore.mode === 'dark' ? Sunny : Moon"
+              circle
+              @click="handleThemeToggle"
+            />
+          </el-tooltip>
           <el-dropdown>
             <span class="user-dropdown">
-              <el-avatar
-                :size="32"
-                :icon="'UserFilled'"
-              />
+              <el-avatar :size="32" icon="UserFilled" />
               <span class="username">{{ authStore.user?.email }}</span>
             </span>
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item disabled>
-                  角色: {{ authStore.user?.role }}
+                  {{ t('common.role') }}: {{ authStore.user?.role }}
                 </el-dropdown-item>
-                <el-dropdown-item
-                  divided
-                  @click="handleLogout"
-                >
-                  退出登录
+                <el-dropdown-item divided @click="handleLogout">
+                  {{ t('common.logout') }}
                 </el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
         </div>
       </el-header>
-
       <el-main class="main-content">
         <router-view />
       </el-main>
@@ -117,7 +155,7 @@ function toggleCollapse() {
 }
 
 .sidebar {
-  background-color: #001529;
+  background-color: var(--sidebar-bg, #001529);
   transition: width 0.3s;
 }
 
@@ -129,25 +167,25 @@ function toggleCollapse() {
   color: #fff;
   font-size: 18px;
   font-weight: bold;
-  border-bottom: 1px solid #002140;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.el-menu {
+.sidebar :deep(.el-menu) {
   border-right: none;
-  background-color: #001529;
+  background-color: transparent;
 }
 
-.el-menu-item {
-  color: rgba(255, 255, 255, 0.65);
+.sidebar :deep(.el-menu-item) {
+  color: var(--sidebar-text, rgba(255, 255, 255, 0.65));
 }
 
-.el-menu-item:hover {
-  background-color: #1890ff !important;
+.sidebar :deep(.el-menu-item:hover) {
+  background-color: var(--sidebar-active-bg, #1890ff) !important;
   color: #fff;
 }
 
-.el-menu-item.is-active {
-  background-color: #1890ff !important;
+.sidebar :deep(.el-menu-item.is-active) {
+  background-color: var(--sidebar-active-bg, #1890ff) !important;
   color: #fff;
 }
 
@@ -155,8 +193,9 @@ function toggleCollapse() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--border-color, #f0f0f0);
   padding: 0 20px;
+  background-color: var(--card-bg, #fff);
 }
 
 .header-left {
@@ -167,6 +206,7 @@ function toggleCollapse() {
 .header-right {
   display: flex;
   align-items: center;
+  gap: 8px;
 }
 
 .user-dropdown {
@@ -178,10 +218,25 @@ function toggleCollapse() {
 
 .username {
   font-size: 14px;
+  color: var(--text-color, #303133);
 }
 
 .main-content {
-  background-color: #f0f2f5;
+  background-color: var(--content-bg, #f0f2f5);
   overflow-y: auto;
+}
+
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    height: 100vh;
+    z-index: 1000;
+  }
+
+  .username {
+    display: none;
+  }
 }
 </style>

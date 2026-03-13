@@ -1,39 +1,38 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { tablesApi } from '@/api/tables'
 import { getApiErrorMessage } from '@/utils/error'
 import type { DataTable } from '@/types'
+import { PAGINATION } from '@/config/constants'
 
 const router = useRouter()
 
 const tables = ref<DataTable[]>([])
 const loading = ref(false)
+const error = ref<string | null>(null)
 const searchKeyword = ref('')
 const currentPage = ref(1)
-const pageSize = ref(20)
+const pageSize = ref(PAGINATION.DEFAULT_PAGE_SIZE)
 const total = ref(0)
 
-const filteredTables = computed(() => {
-  if (!searchKeyword.value) return tables.value
-  const keyword = searchKeyword.value.toLowerCase()
-  return tables.value.filter((t) =>
-    t.table_name.toLowerCase().includes(keyword)
-  )
-})
+let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
 
 async function loadTables() {
   loading.value = true
+  error.value = null
   try {
     const data = await tablesApi.list({
       page: currentPage.value,
       page_size: pageSize.value,
+      search: searchKeyword.value || undefined,
     })
     tables.value = data.items ?? []
     total.value = data.total ?? 0
-  } catch (error) {
-    ElMessage.error(getApiErrorMessage(error))
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : getApiErrorMessage(e)
+    ElMessage.error(error.value)
   } finally {
     loading.value = false
   }
@@ -46,6 +45,22 @@ function handleViewDetail(table: DataTable) {
 function handlePageChange(page: number) {
   currentPage.value = page
   loadTables()
+}
+
+function handleSizeChange(size: number) {
+  pageSize.value = size
+  currentPage.value = 1
+  loadTables()
+}
+
+function handleSearch() {
+  if (searchDebounceTimer) {
+    clearTimeout(searchDebounceTimer)
+  }
+  searchDebounceTimer = setTimeout(() => {
+    currentPage.value = 1
+    loadTables()
+  }, 300)
 }
 
 onMounted(() => {
@@ -65,6 +80,19 @@ onMounted(() => {
         </div>
       </template>
 
+      <!-- Error Alert -->
+      <el-alert
+        v-if="error && !loading"
+        :title="error"
+        type="error"
+        :closable="false"
+        class="error-alert"
+      >
+        <el-button type="primary" size="small" @click="loadTables">
+          重试
+        </el-button>
+      </el-alert>
+
       <div class="content">
         <div class="search-bar">
           <el-input
@@ -72,6 +100,7 @@ onMounted(() => {
             placeholder="搜索表名"
             clearable
             style="max-width: 400px"
+            @input="handleSearch"
           >
             <template #prefix>
               <el-icon><Search /></el-icon>
@@ -81,7 +110,7 @@ onMounted(() => {
 
         <el-table
           v-loading="loading"
-          :data="filteredTables"
+          :data="tables"
           style="width: 100%"
           stripe
         >
@@ -96,7 +125,7 @@ onMounted(() => {
             width="120"
           >
             <template #default="{ row }">
-              {{ row.row_count?.toLocaleString() || 0 }}
+              {{ row.row_count?.toLocaleString() || '-' }}
             </template>
           </el-table-column>
           <el-table-column
@@ -137,18 +166,18 @@ onMounted(() => {
 
         <div class="pagination">
           <el-pagination
-            :current-page="currentPage"
-            :page-size="pageSize"
+            v-model:current-page="currentPage"
+            v-model:page-size="pageSize"
+            :page-sizes="PAGINATION.PAGE_SIZE_OPTIONS"
             :total="total"
-            layout="total, prev, pager, next"
-            @current-change="handlePageChange"
+            layout="total, sizes, prev, pager, next"
+            @size-change="handleSizeChange"
           />
         </div>
       </div>
     </el-card>
   </div>
 </template>
-
 
 <style scoped>
 .tables-view {

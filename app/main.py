@@ -215,6 +215,10 @@ if not TESTING:
 
     app.add_middleware(RequestLoggingMiddleware)
 
+# Security headers middleware (applied on all requests)
+from app.middleware.security import SecurityHeadersMiddleware
+app.add_middleware(SecurityHeadersMiddleware)
+
 # Rate limit exception handler (only in production)
 if not TESTING:
     from slowapi.errors import RateLimitExceeded

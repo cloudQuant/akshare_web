@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { scriptsApi } from '@/api/scripts'
@@ -17,43 +17,19 @@ const currentPage = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
 
-const filteredScripts = computed(() => {
-  let result = scripts.value
-
-  if (selectedCategory.value) {
-    result = result.filter((s) => s.category === selectedCategory.value)
-  }
-
-  if (searchKeyword.value) {
-    const keyword = searchKeyword.value.toLowerCase()
-    result = result.filter(
-      (s) =>
-        s.script_name.toLowerCase().includes(keyword) ||
-        (s.description || '').toLowerCase().includes(keyword)
-    )
-  }
-
-  return result
-})
-
-const paginatedScripts = computed(() => {
-  const start = (currentPage.value - 1) * pageSize.value
-  const end = start + pageSize.value
-  return filteredScripts.value.slice(start, end)
-})
+let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
 
 async function loadScripts() {
   loading.value = true
   try {
     const data = await scriptsApi.list({
-      page: 1,
-      page_size: 2000,
+      page: currentPage.value,
+      page_size: pageSize.value,
+      category: selectedCategory.value || undefined,
+      keyword: searchKeyword.value || undefined,
     })
     scripts.value = data.items ?? []
     total.value = data.total ?? 0
-
-    const uniqueCategories = new Set(scripts.value.map((s) => s.category))
-    categories.value = Array.from(uniqueCategories).sort()
   } catch (error) {
     ElMessage.error(getApiErrorMessage(error))
   } finally {
@@ -61,8 +37,17 @@ async function loadScripts() {
   }
 }
 
+async function loadCategories() {
+  try {
+    categories.value = await scriptsApi.getCategories()
+  } catch (error) {
+    console.error('Failed to load categories:', error)
+  }
+}
+
 function handlePageChange(page: number) {
   currentPage.value = page
+  loadScripts()
 }
 
 function handleViewDetail(script: DataScript) {
@@ -72,13 +57,27 @@ function handleViewDetail(script: DataScript) {
 function handleCategoryChange(category: string | number | boolean | undefined) {
   selectedCategory.value = String(category ?? '')
   currentPage.value = 1
+  loadScripts()
 }
 
 function handleSearch() {
+  if (searchDebounceTimer) {
+    clearTimeout(searchDebounceTimer)
+  }
+  searchDebounceTimer = setTimeout(() => {
+    currentPage.value = 1
+    loadScripts()
+  }, 300)
+}
+
+function handleSizeChange(size: number) {
+  pageSize.value = size
   currentPage.value = 1
+  loadScripts()
 }
 
 onMounted(() => {
+  loadCategories()
   loadScripts()
 })
 </script>
@@ -132,7 +131,7 @@ onMounted(() => {
         <!-- Script List -->
         <el-table
           v-loading="loading"
-          :data="paginatedScripts"
+          :data="scripts"
           style="width: 100%"
           stripe
         >
@@ -178,13 +177,12 @@ onMounted(() => {
         <!-- Pagination -->
         <div class="pagination">
           <el-pagination
-            :current-page="currentPage"
-            :page-size="pageSize"
+            v-model:current-page="currentPage"
+            v-model:page-size="pageSize"
             :page-sizes="[10, 20, 50, 100]"
-            :total="filteredScripts.length"
+            :total="total"
             layout="total, sizes, prev, pager, next, jumper"
-            @current-change="handlePageChange"
-            @size-change="(size: number) => { pageSize = size; currentPage = 1 }"
+            @size-change="handleSizeChange"
           />
         </div>
       </div>

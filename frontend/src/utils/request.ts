@@ -92,7 +92,9 @@ request.interceptors.response.use(
                 error.config.headers.Authorization = `Bearer ${newToken}`
                 return request(error.config)
               }
-            } catch {
+            } catch (refreshError) {
+              // Token refresh failed - log and force re-login
+              console.error('Token refresh failed:', refreshError)
               refreshSubscribers = []
               authStore.logout()
               window.location.href = '/login'

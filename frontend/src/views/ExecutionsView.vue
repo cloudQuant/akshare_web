@@ -1,16 +1,18 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { dataApi } from '@/api/data'
+import { getApiErrorMessage } from '@/utils/error'
 import type { Execution, ExecutionStats, PaginatedResponse } from '@/types'
+import { PAGINATION } from '@/config/constants'
 
 const executions = ref<Execution[]>([])
 const loading = ref(false)
+const error = ref<string | null>(null)
 const stats = ref<ExecutionStats | null>(null)
 const currentPage = ref(1)
-const pageSize = ref(20)
+const pageSize = ref(PAGINATION.DEFAULT_PAGE_SIZE)
 const total = ref(0)
 
-/** Element Plus ElTag type values */
 const statusMap: Record<
   string,
   { text: string; type: 'info' | 'primary' | 'success' | 'danger' | 'warning' }
@@ -21,8 +23,11 @@ const statusMap: Record<
   failed: { text: '失败', type: 'danger' },
 }
 
+let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
+
 async function loadExecutions() {
   loading.value = true
+  error.value = null
   try {
     const data = await dataApi.listExecutions({
       page: currentPage.value,
@@ -31,8 +36,8 @@ async function loadExecutions() {
     const res = data as PaginatedResponse<Execution>
     executions.value = res.items ?? []
     total.value = res.total ?? 0
-  } catch (error) {
-    console.error('Failed to load executions:', error)
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : getApiErrorMessage(e)
   } finally {
     loading.value = false
   }
@@ -41,13 +46,19 @@ async function loadExecutions() {
 async function loadStats() {
   try {
     stats.value = await dataApi.getStats()
-  } catch (error) {
-    console.error('Failed to load stats:', error)
+  } catch (e) {
+    console.error('Failed to load stats:', e)
   }
 }
 
 function handlePageChange(page: number) {
   currentPage.value = page
+  loadExecutions()
+}
+
+function handleSizeChange(size: number) {
+  pageSize.value = size
+  currentPage.value = 1
   loadExecutions()
 }
 
@@ -59,8 +70,8 @@ async function handleRetry(execution: Execution) {
   try {
     await dataApi.retry(execution.id)
     loadExecutions()
-  } catch (error) {
-    console.error('Failed to retry:', error)
+  } catch (e) {
+    ElMessage.error(getApiErrorMessage(e))
   }
 }
 
@@ -124,6 +135,19 @@ onMounted(() => {
       <template #header>
         <span>执行记录</span>
       </template>
+
+      <!-- Error Alert -->
+      <el-alert
+        v-if="error && !loading"
+        :title="error"
+        type="error"
+        :closable="false"
+        class="error-alert"
+      >
+        <el-button type="primary" size="small" @click="loadExecutions">
+          重试
+        </el-button>
+      </el-alert>
 
       <el-table
         v-loading="loading"
@@ -207,11 +231,12 @@ onMounted(() => {
 
       <div class="pagination">
         <el-pagination
-          :current-page="currentPage"
-          :page-size="pageSize"
+          v-model:current-page="currentPage"
+          v-model:page-size="pageSize"
+          :page-sizes="[10, 20, 50, 100]"
           :total="total"
-          layout="total, prev, pager, next"
-          @current-change="handlePageChange"
+          layout="total, sizes, prev, pager, next"
+          @size-change="handleSizeChange"
         />
       </div>
     </el-card>

@@ -64,6 +64,10 @@ class User(Base):
         DateTime(timezone=True),
         nullable=True,
     )
+    password_changed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
 
     def __repr__(self) -> str:
         return f"<User(id={self.id}, username={self.username}, email={self.email}, role={self.role.value})>"

@@ -4,10 +4,12 @@ Authentication API routes.
 Provides endpoints for user registration, login, token refresh, and logout.
 """
 
+import os
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,6 +22,7 @@ from app.api.schemas import (
     RefreshTokenRequest,
     RegisterRequest,
 )
+from app.core.config import settings
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -33,6 +36,15 @@ from app.models.user import User, UserRole
 from app.utils.constants import MAX_USERNAME_GENERATION_ATTEMPTS
 
 router = APIRouter()
+
+DEFAULT_PASSWORD = "admin123"
+
+
+class ChangePasswordRequest(BaseModel):
+    """Request model for password change."""
+
+    old_password: str
+    new_password: str
 
 
 @router.post(
@@ -121,7 +133,7 @@ async def register(
         429: {"model": ErrorResponse, "description": "Rate limit exceeded"},
     },
 )
-@rate_limit("10/minute")  # Limit login attempts
+@rate_limit("10/minute")
 async def login(
     request: LoginRequest,
     db: AsyncSession = Depends(get_db),
@@ -131,14 +143,11 @@ async def login(
 
     Validates credentials and returns JWT access token for authentication.
     """
-    # Normalize email
     email = request.email.lower()
 
-    # Find user by email
     result = await db.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
 
-    # Verify password
     if user is None or not verify_password(request.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -146,20 +155,24 @@ async def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Check if user is active
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User account is disabled",
         )
 
-    # Update last login
     user.last_login = datetime.now(UTC)
     await db.commit()
 
-    # Create tokens
     access_token = create_access_token(data={"sub": str(user.id), "email": user.email})
     refresh_token = create_refresh_token(data={"sub": str(user.id)})
+
+    require_password_change = False
+    if settings.is_production:
+        if user.password_changed_at is None:
+            require_password_change = True
+        elif verify_password(DEFAULT_PASSWORD, user.hashed_password):
+            require_password_change = True
 
     return APIResponse(
         success=True,
@@ -167,6 +180,7 @@ async def login(
         data={
             "access_token": access_token,
             "refresh_token": refresh_token,
+            "require_password_change": require_password_change,
             "user": {
                 "user_id": user.id,
                 "email": user.email,
@@ -278,4 +292,60 @@ async def get_current_user_info(
             "created_at": current_user.created_at.isoformat(),
             "updated_at": current_user.updated_at.isoformat() if current_user.updated_at else None,
         },
+    )
+
+
+@router.post(
+    "/change-password",
+    response_model=APIResponse,
+    responses={
+        400: {"model": ErrorResponse, "description": "Invalid old password"},
+        401: {"model": ErrorResponse, "description": "Not authenticated"},
+    },
+)
+async def change_password(
+    request: ChangePasswordRequest,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+) -> APIResponse:
+    """
+    Change user password.
+
+    Validates old password and updates to new password.
+    In production, forces password change if using default password.
+    """
+    result = await db.execute(select(User).where(User.id == current_user.id))
+    user = result.scalar_one_or_none()
+
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    if not verify_password(request.old_password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="旧密码错误",
+        )
+
+    if len(request.new_password) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="新密码长度至少为8位",
+        )
+
+    if request.new_password == request.old_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="新密码不能与旧密码相同",
+        )
+
+    user.hashed_password = hash_password(request.new_password)
+    user.password_changed_at = datetime.now(UTC)
+    await db.commit()
+
+    return APIResponse(
+        success=True,
+        message="密码修改成功",
     )

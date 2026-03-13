@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
+import piniaPluginPersistedstate from 'pinia-plugin-persistedstate'
 import { useAuthStore } from '@/stores/auth'
 import type { AuthResponse, User } from '@/types'
 
@@ -28,7 +29,9 @@ Object.defineProperty(window, 'localStorage', { value: localStorageMock })
 
 describe('Auth Store', () => {
   beforeEach(() => {
-    setActivePinia(createPinia())
+    const pinia = createPinia()
+    pinia.use(piniaPluginPersistedstate)
+    setActivePinia(pinia)
     localStorageMock.clear()
     vi.clearAllMocks()
   })
@@ -86,7 +89,6 @@ describe('Auth Store', () => {
     expect(store.accessToken).toBe('access123')
     expect(store.refreshToken).toBe('refresh123')
     expect(store.user).toEqual(mockResponse.user)
-    expect(localStorageMock.setItem).toHaveBeenCalled()
   })
 
   it('register sets tokens and user', async () => {
@@ -105,20 +107,17 @@ describe('Auth Store', () => {
     expect(store.user).toEqual(mockResponse.user)
   })
 
-  it('logout clears state', () => {
+  it('logout clears state', async () => {
     const store = useAuthStore()
     store.user = { id: 1 } as User
     store.accessToken = 'token'
     store.refreshToken = 'refresh'
 
-    store.logout()
+    await store.logout()
 
     expect(store.user).toBeNull()
     expect(store.accessToken).toBeNull()
     expect(store.refreshToken).toBeNull()
-    expect(localStorageMock.removeItem).toHaveBeenCalledWith('auth_user')
-    expect(localStorageMock.removeItem).toHaveBeenCalledWith('auth_access_token')
-    expect(localStorageMock.removeItem).toHaveBeenCalledWith('auth_refresh_token')
   })
 
   it('setUser updates user', () => {
@@ -126,49 +125,6 @@ describe('Auth Store', () => {
     const user = { id: 1, email: 'test@example.com' } as User
     store.setUser(user)
     expect(store.user).toEqual(user)
-  })
-
-  it('persistAuth saves to localStorage', () => {
-    const store = useAuthStore()
-    store.user = { id: 1 } as User
-    store.accessToken = 'access'
-    store.refreshToken = 'refresh'
-
-    store.persistAuth()
-
-    expect(localStorageMock.setItem).toHaveBeenCalledWith('auth_user', JSON.stringify({ id: 1 }))
-    expect(localStorageMock.setItem).toHaveBeenCalledWith('auth_access_token', 'access')
-    expect(localStorageMock.setItem).toHaveBeenCalledWith('auth_refresh_token', 'refresh')
-  })
-
-  it('restoreAuth loads from localStorage', () => {
-    localStorageMock.getItem.mockImplementation((key: string) => {
-      if (key === 'auth_user') return JSON.stringify({ id: 1, email: 'test@example.com' })
-      if (key === 'auth_access_token') return 'saved_access'
-      if (key === 'auth_refresh_token') return 'saved_refresh'
-      return null
-    })
-
-    const store = useAuthStore()
-    store.restoreAuth()
-
-    expect(store.user).toEqual({ id: 1, email: 'test@example.com' })
-    expect(store.accessToken).toBe('saved_access')
-    expect(store.refreshToken).toBe('saved_refresh')
-  })
-
-  it('restoreAuth handles invalid JSON gracefully', () => {
-    localStorageMock.getItem.mockImplementation((key: string) => {
-      if (key === 'auth_user') return 'invalid-json'
-      return null
-    })
-
-    const store = useAuthStore()
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    store.restoreAuth()
-    consoleSpy.mockRestore()
-
-    expect(store.user).toBeNull()
   })
 
   it('refreshAccessToken throws when no refresh token', async () => {
