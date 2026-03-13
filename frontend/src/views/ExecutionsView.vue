@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { dataApi } from '@/api/data'
 import { getApiErrorMessage } from '@/utils/error'
+import { logger } from '@/utils/logger'
 import type { Execution, ExecutionStats, PaginatedResponse } from '@/types'
 import { PAGINATION } from '@/config/constants'
 
@@ -46,7 +47,7 @@ async function loadStats() {
   try {
     stats.value = await dataApi.getStats()
   } catch (e) {
-    console.error('Failed to load stats:', e)
+    logger.apiError('/executions/stats', e)
   }
 }
 

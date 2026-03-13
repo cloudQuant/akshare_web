@@ -1,9 +1,17 @@
 <script setup lang="ts">
 import { RouterView } from 'vue-router'
+import { logger } from '@/utils/logger'
+import ErrorBoundary from '@/components/common/ErrorBoundary.vue'
+
+function handleGlobalError(error: Error, instance: unknown, info: string) {
+  logger.error('Global error caught', { error: error.message, info, stack: error.stack })
+}
 </script>
 
 <template>
-  <RouterView />
+  <ErrorBoundary @error="handleGlobalError">
+    <RouterView />
+  </ErrorBoundary>
 </template>
 
 <style>

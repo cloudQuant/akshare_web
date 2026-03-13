@@ -5,6 +5,7 @@ import axios, {
 } from 'axios'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
+import { logger } from '@/utils/logger'
 
 /** API error response shape */
 interface ApiErrorData {
@@ -94,7 +95,7 @@ request.interceptors.response.use(
               }
             } catch (refreshError) {
               // Token refresh failed - log and force re-login
-              console.error('Token refresh failed:', refreshError)
+              logger.error('Token refresh failed', { error: refreshError })
               refreshSubscribers = []
               authStore.logout()
               window.location.href = '/login'

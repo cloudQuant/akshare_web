@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { scriptsApi } from '@/api/scripts'
 import { getApiErrorMessage } from '@/utils/error'
+import { logger } from '@/utils/logger'
 import type { DataScript } from '@/types'
 
 const router = useRouter()
@@ -41,7 +42,7 @@ async function loadCategories() {
   try {
     categories.value = await scriptsApi.getCategories()
   } catch (error) {
-    console.error('Failed to load categories:', error)
+    logger.apiError('/scripts/categories', error)
   }
 }
 
