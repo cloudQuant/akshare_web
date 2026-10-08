@@ -2,6 +2,8 @@
 
 A web-based financial data management platform for [akshare](https://github.com/akfamily/akshare).
 
+这个项目已经不再开发和维护了，后续的开发和维护工作换到了新的仓库：https://github.com/cloudQuant/opendata
+
 ## 项目说明
 
 本项目包含三个部分：
